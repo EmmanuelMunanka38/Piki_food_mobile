@@ -7,32 +7,35 @@ import {
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Image,
+  TouchableOpacity,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { PikiButton } from '@/components/ui/PikiButton';
-import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { Images } from '@/constants/images';
 
 const { width } = Dimensions.get('window');
+const IMAGE_SIZE = width - Spacing['container-padding'] * 2;
 
 const slides = [
   {
     id: '1',
-    image: require('@/assets/images/fast-food-bro.png'),
-    title: 'Delicious Fast Food',
-    subtitle: 'Enjoy a wide variety of burgers, fries, and your favorite fast food meals, all in one place. From classic beef burgers to crispy chicken wraps, we have something for every craving. Satisfy your hunger with our quickly prepared and freshly served meals that bring the taste of your favorite fast food joints straight to you.',
+    image: Images.onboarding[0],
+    title: 'Premium Dining at Home',
+    subtitle: 'Explore a curated selection of the finest restaurants across Dar es Salaam and Arusha.',
   },
   {
     id: '2',
-    image: require('@/assets/images/Take-Away-pana.png'),
-    title: 'Easy Take Away',
-    subtitle: 'Order your favorite meals and pick them up on the go, quickly and conveniently. Skip the wait and enjoy restaurant-quality food wherever you are. With just a few taps, you can browse menus, place your order, and have your food ready for pickup at your convenience, making your busy schedule a little easier to manage.',
+    image: Images.onboarding[1],
+    title: 'Fast delivery across Tanzania',
+    subtitle: 'Your favorite local delicacies delivered to your doorstep in record time, every day.',
   },
   {
     id: '3',
-    image: require('@/assets/images/Chef-bro.png'),
-    title: 'Prepared by Expert Chefs',
-    subtitle: 'Every dish is carefully prepared by skilled chefs using the freshest ingredients sourced from local markets. From traditional Tanzanian flavors to international cuisine, our chefs bring passion and expertise to every plate. Taste the difference that professional culinary craftsmanship makes in every single bite you take.',
+    image: Images.onboarding[2],
+    title: 'Real-time tracking',
+    subtitle: "Watch your meal's journey from the kitchen to your hand with precision GPS tracking.",
   },
 ];
 
@@ -54,10 +57,19 @@ export default function OnboardingScreen() {
     router.replace('/login?mode=sign-in');
   };
 
+  const handleGuest = () => {
+    router.replace('/(tabs)');
+  };
+
   const renderSlide = ({ item }: { item: typeof slides[0] }) => (
     <View style={styles.slide}>
-      <View style={styles.imageWrapper}>
-        <Image source={item.image} style={styles.image} resizeMode="contain" />
+      <View style={[styles.imageWrapper, { width: IMAGE_SIZE, height: IMAGE_SIZE }]}>
+        <Image
+          source={{ uri: item.image }}
+          style={styles.image}
+          contentFit="cover"
+          transition={300}
+        />
       </View>
       <View style={styles.slideContent}>
         <Text style={[styles.title, { color: Colors[theme]['on-surface'] }]}>
@@ -102,6 +114,7 @@ export default function OnboardingScreen() {
                     index === currentIndex
                       ? Colors[theme].primary
                       : Colors[theme]['surface-variant'],
+                  width: index === currentIndex ? 24 : 8,
                 },
               ]}
             />
@@ -121,6 +134,12 @@ export default function OnboardingScreen() {
             fullWidth
           />
         </View>
+
+        <TouchableOpacity onPress={handleGuest} style={styles.guestButton}>
+          <Text style={[styles.guestText, { color: Colors[theme]['on-surface-variant'] }]}>
+            Continue as Guest
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -150,10 +169,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   imageWrapper: {
-    width: 220,
-    height: 220,
     alignSelf: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    ...Shadows.md,
   },
   image: {
     width: '100%',
@@ -161,19 +181,18 @@ const styles = StyleSheet.create({
   },
   slideContent: {
     paddingHorizontal: Spacing['container-padding'],
-    paddingBottom: Spacing.xl,
     alignItems: 'center',
+    gap: Spacing.md,
   },
   title: {
     ...Typography.h1,
     textAlign: 'center',
-    marginBottom: Spacing.sm,
   },
   subtitle: {
     ...Typography['body-md'],
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: Spacing.md,
+    maxWidth: 280,
   },
   footer: {
     paddingHorizontal: Spacing['container-padding'],
@@ -183,14 +202,22 @@ const styles = StyleSheet.create({
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: Spacing.sm,
   },
   dot: {
-    width: 8,
     height: 8,
     borderRadius: 4,
   },
   actions: {
     gap: Spacing.sm,
+  },
+  guestButton: {
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  guestText: {
+    ...Typography['label-sm'],
+    fontWeight: '500',
   },
 });

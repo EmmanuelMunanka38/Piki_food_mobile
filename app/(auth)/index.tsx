@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Typography, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const routeByRole = (role: string) => {
   switch (role) {
@@ -20,8 +22,9 @@ const routeByRole = (role: string) => {
 
 export default function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const scaleAnim = useRef(new Animated.Value(0.7)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
+  const circleAnim = useRef(new Animated.Value(0)).current;
   const navigatedRef = useRef(false);
 
   useEffect(() => {
@@ -36,20 +39,25 @@ export default function SplashScreen() {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 1000,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        damping: 12,
-        stiffness: 100,
+        damping: 14,
+        stiffness: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(circleAnim, {
+        toValue: 1,
+        duration: 1200,
         useNativeDriver: true,
       }),
     ]).start();
 
     Animated.timing(barAnim, {
       toValue: 1,
-      duration: 2000,
+      duration: 2200,
       useNativeDriver: false,
     }).start(() => {
       if (navigatedRef.current) return;
@@ -61,8 +69,55 @@ export default function SplashScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.bgCircle1} />
-      <View style={styles.bgCircle2} />
+      <View style={styles.gradientLayer1} />
+      <View style={styles.gradientLayer2} />
+      <View style={styles.gradientLayer3} />
+
+      <Animated.View
+        style={[
+          styles.bgCircle1,
+          {
+            opacity: circleAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.12],
+            }),
+            transform: [{
+              scale: circleAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.6, 1],
+              }),
+            }],
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.bgCircle2,
+          {
+            opacity: circleAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.1],
+            }),
+            transform: [{
+              scale: circleAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.6, 1],
+              }),
+            }],
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.bgCircle3,
+          {
+            opacity: circleAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.06],
+            }),
+          },
+        ]}
+      />
 
       <View style={styles.topDecoration}>
         <View style={styles.topBar} />
@@ -78,7 +133,9 @@ export default function SplashScreen() {
         ]}
       >
         <View style={styles.logoContainer}>
-          <MaterialCommunityIcons name="moped" size={56} color="#ffffff" />
+          <View style={styles.logoInner}>
+            <MaterialCommunityIcons name="moped" size={52} color="#ffffff" />
+          </View>
         </View>
         <View style={styles.brandWrapper}>
           <Text style={styles.brandName}>Piki Food</Text>
@@ -109,34 +166,60 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#006d36',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Spacing.xl,
     paddingHorizontal: Spacing['container-padding'],
   },
+  gradientLayer1: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0fa958',
+  },
+  gradientLayer2: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#006d36',
+    opacity: 0.85,
+  },
+  gradientLayer3: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SCREEN_HEIGHT * 0.6,
+    backgroundColor: '#006d36',
+  },
   bgCircle1: {
     position: 'absolute',
-    bottom: -96,
-    left: -96,
-    width: 256,
-    height: 256,
-    borderRadius: 128,
-    backgroundColor: 'rgba(253, 192, 3, 0.1)',
+    bottom: -100,
+    left: -100,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: '#fdc003',
   },
   bgCircle2: {
     position: 'absolute',
-    top: -96,
-    right: -96,
-    width: 256,
-    height: 256,
-    borderRadius: 128,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    top: -100,
+    right: -100,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: '#ffffff',
+  },
+  bgCircle3: {
+    position: 'absolute',
+    top: SCREEN_HEIGHT * 0.35,
+    left: SCREEN_WIDTH * 0.5,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#fdc003',
   },
   topDecoration: {
     width: '100%',
     alignItems: 'center',
     opacity: 0.2,
+    marginTop: Spacing.md,
   },
   topBar: {
     width: 64,
@@ -149,19 +232,27 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   logoContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
+    width: 104,
+    height: 104,
+    borderRadius: 30,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  logoInner: {
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   brandWrapper: {
     alignItems: 'center',
@@ -169,14 +260,14 @@ const styles = StyleSheet.create({
   brandName: {
     ...Typography.display,
     color: '#ffffff',
-    fontSize: 42,
-    lineHeight: 48,
+    fontSize: 44,
+    lineHeight: 50,
     letterSpacing: -0.5,
   },
   tagline: {
     ...Typography['label-md'],
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 4,
+    color: 'rgba(255,255,255,0.75)',
+    letterSpacing: 5,
     textTransform: 'uppercase',
     marginTop: Spacing.xs,
   },
@@ -189,7 +280,7 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: '100%',
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -199,11 +290,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     shadowColor: '#fdc003',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
   },
   footerText: {
     ...Typography['body-sm'],
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.5)',
   },
 });

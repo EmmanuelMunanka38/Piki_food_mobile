@@ -1,5 +1,7 @@
 import { api } from './api';
-
+/**
+ * I think the auth erros is from here this auth api implementation .
+ */
 export const authService = {
   async sendOtp(email: string, phone: string, role?: string): Promise<void> {
     await api.post('/auth/send-otp', { email, phone, role });

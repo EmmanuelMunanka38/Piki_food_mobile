@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 
 function detectRole(phone: string): { role: 'customer' | 'driver' | 'restaurant_owner'; prefix: string; number: string } {
@@ -22,7 +22,7 @@ const roleConfig = {
 } as const;
 
 export default function AuthScreen() {
-  const { mode: modeParam, type } = useLocalSearchParams<{ mode?: string; type?: string }>();
+  const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
   const theme = 'light';
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>(modeParam === 'sign-up' ? 'sign-up' : 'sign-in');
   const [email, setEmail] = useState('');
@@ -46,7 +46,7 @@ export default function AuthScreen() {
       if (!isEmailValid) {
         setError('Please enter a valid email address');
       } else if (!isPhoneValid) {
-        setError('Enter D or R prefix followed by your number (e.g. D+2557XXXXXXXX)');
+        setError('Enter a valid phone number (e.g. +255712345678 or D+255712345678)');
       } else if (mode === 'sign-up' && !isNameValid) {
         setError('Name must be at least 2 characters');
       }
@@ -57,7 +57,6 @@ export default function AuthScreen() {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = numberPart;
-    const displayPhone = phone.trim();
 
     try {
       await sendOtp(cleanEmail, cleanPhone, detected.role);
@@ -74,7 +73,7 @@ export default function AuthScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, email, phone, mode, name, sendOtp, detected]);
+  }, [canSubmit, email, mode, name, sendOtp, detected, isEmailValid, isPhoneValid, isNameValid, numberPart]);
 
   const switchMode = useCallback(() => {
     setMode((m) => (m === 'sign-in' ? 'sign-up' : 'sign-in'));
@@ -99,7 +98,7 @@ export default function AuthScreen() {
 
         <View style={styles.header}>
           <View style={[styles.brandIcon, { backgroundColor: Colors[theme].primary }]}>
-            <MaterialCommunityIcons name="moped" size={32} color="#ffffff" />
+            <MaterialCommunityIcons name="silverware-fork-knife" size={32} color="#ffffff" />
           </View>
           <Text style={[styles.brandName, { color: Colors[theme].primary }]}>Piki Food</Text>
         </View>
@@ -143,12 +142,12 @@ export default function AuthScreen() {
           </View>
 
           <Text style={[styles.title, { color: Colors[theme]['on-surface'] }]}>
-            {mode === 'sign-in' ? 'Welcome back' : type === 'agent' ? 'Agent Login' : 'Create account'}
+            {mode === 'sign-in' ? 'Welcome back' : 'Create account'}
           </Text>
           <Text style={[styles.subtitle, { color: Colors[theme]['on-surface-variant'] }]}>
             {mode === 'sign-in'
-              ? 'Enter your email and phone to receive a code'
-              : 'Enter your details to get started'}
+              ? 'Enter your details to receive a verification code'
+              : 'Fill in your details to get started'}
           </Text>
 
           {error ? (
@@ -167,7 +166,7 @@ export default function AuthScreen() {
                 <MaterialCommunityIcons name="account-outline" size={20} color={Colors[theme]['on-surface-variant']} />
                 <TextInput
                   style={[styles.input, { color: Colors[theme]['on-surface'] }]}
-                  placeholder="Name"
+                  placeholder="John Doe"
                   placeholderTextColor={Colors[theme]['on-surface-variant'] + '80'}
                   value={name}
                   onChangeText={setName}
@@ -202,13 +201,14 @@ export default function AuthScreen() {
             </Text>
             <View style={[styles.inputWrap, { backgroundColor: Colors[theme]['surface-container-low'], borderColor: phone ? (isPhoneValid ? Colors[theme].primary : Colors[theme].tertiary) : Colors[theme]['outline-variant'] }]}>
               <MaterialCommunityIcons name="phone-outline" size={20} color={Colors[theme]['on-surface-variant']} />
+              <Text style={[styles.phonePrefix, { color: Colors[theme]['on-surface-variant'] }]}>+255</Text>
               <TextInput
                 style={[styles.input, { color: Colors[theme]['on-surface'] }]}
-                placeholder="+255 7## ### ###"
+                placeholder="712 345 678"
                 placeholderTextColor={Colors[theme]['on-surface-variant'] + '80'}
                 value={phone}
                 onChangeText={setPhone}
-                keyboardType="default"
+                keyboardType="phone-pad"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -255,7 +255,7 @@ export default function AuthScreen() {
         </View>
 
         <Text style={[styles.terms, { color: Colors[theme]['on-surface-variant'] }]}>
-          By continuing, you agree to Piki's Terms of Service and Privacy Policy.
+          By continuing, you agree to Piki{"'"}s Terms of Service and Privacy Policy.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -268,9 +268,31 @@ const styles = StyleSheet.create({
   backButton: { marginTop: 60, marginBottom: Spacing.md },
   backButtonInner: { width: 40, height: 40, borderRadius: BorderRadius.full, alignItems: 'center', justifyContent: 'center' },
   header: { alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.xl },
-  brandIcon: { width: 64, height: 64, borderRadius: BorderRadius.xl, alignItems: 'center', justifyContent: 'center', ...Shadows.md },
+  brandIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: BorderRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#006d36',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
   brandName: { ...Typography.h1, fontSize: 28 },
-  card: { borderRadius: 24, padding: Spacing.xl, borderWidth: 1, borderColor: Colors.light['outline-variant'], gap: Spacing.md, ...Shadows.md },
+  card: {
+    borderRadius: 24,
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.light['outline-variant'],
+    gap: Spacing.md,
+    shadowColor: '#0fa958',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 4,
+  },
   toggleRow: { flexDirection: 'row', backgroundColor: Colors.light['surface-container-low'], borderRadius: BorderRadius.full, padding: 4 },
   toggleBtn: { flex: 1, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, alignItems: 'center' },
   toggleText: { ...Typography['label-md'], fontWeight: '600' },
@@ -280,9 +302,29 @@ const styles = StyleSheet.create({
   errorText: { ...Typography['body-sm'], flex: 1 },
   inputGroup: { gap: Spacing.xs },
   inputLabel: { ...Typography['label-sm'], fontWeight: '500', marginLeft: 4 },
-  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.xl, borderWidth: 1.5, height: 52 },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    height: 52,
+  },
   input: { flex: 1, ...Typography['body-md'], height: '100%' },
-  submitBtn: { paddingVertical: Spacing.md, borderRadius: BorderRadius.full, alignItems: 'center', justifyContent: 'center', height: 52 },
+  phonePrefix: { ...Typography['body-md'], marginRight: Spacing.xs },
+  submitBtn: {
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    shadowColor: '#006d36',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
   submitText: { ...Typography['label-md'], fontWeight: '700', fontSize: 16 },
   switchRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.xs, marginTop: Spacing.lg },
   switchText: { ...Typography['body-md'] },
