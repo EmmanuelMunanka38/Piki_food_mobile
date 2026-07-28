@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Typography, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+
+const logo = require('@/assets/images/logo.png');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -39,25 +41,25 @@ export default function SplashScreen() {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1000,
+        duration: 600,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         damping: 14,
-        stiffness: 80,
+        stiffness: 120,
         useNativeDriver: true,
       }),
       Animated.timing(circleAnim, {
         toValue: 1,
-        duration: 1200,
+        duration: 800,
         useNativeDriver: true,
       }),
     ]).start();
 
     Animated.timing(barAnim, {
       toValue: 1,
-      duration: 2200,
+      duration: 1400,
       useNativeDriver: false,
     }).start(() => {
       if (navigatedRef.current) return;
@@ -134,7 +136,7 @@ export default function SplashScreen() {
       >
         <View style={styles.logoContainer}>
           <View style={styles.logoInner}>
-            <MaterialCommunityIcons name="moped" size={52} color="#ffffff" />
+            <Image source={logo} style={styles.logoImage} contentFit="contain" />
           </View>
         </View>
         <View style={styles.brandWrapper}>
@@ -253,6 +255,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  logoImage: {
+    width: 52,
+    height: 52,
   },
   brandWrapper: {
     alignItems: 'center',

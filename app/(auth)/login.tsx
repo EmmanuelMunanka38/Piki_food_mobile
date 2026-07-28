@@ -4,9 +4,12 @@ import {
   KeyboardAvoidingView, Platform, TextInput, ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+
+const logo = require('@/assets/images/logo.png');
 
 function detectRole(phone: string): { role: 'customer' | 'driver' | 'restaurant_owner'; prefix: string; number: string } {
   const clean = phone.replace(/[\s-]/g, '');
@@ -98,7 +101,7 @@ export default function AuthScreen() {
 
         <View style={styles.header}>
           <View style={[styles.brandIcon, { backgroundColor: Colors[theme].primary }]}>
-            <MaterialCommunityIcons name="silverware-fork-knife" size={32} color="#ffffff" />
+            <Image source={logo} style={styles.brandLogoImage} contentFit="contain" />
           </View>
           <Text style={[styles.brandName, { color: Colors[theme].primary }]}>Piki Food</Text>
         </View>
@@ -279,6 +282,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 6,
+  },
+  brandLogoImage: {
+    width: 40,
+    height: 40,
   },
   brandName: { ...Typography.h1, fontSize: 28 },
   card: {

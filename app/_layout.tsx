@@ -18,7 +18,7 @@ import { setImageCDN } from '@/services/imageOptimizer';
 
 SplashScreen.preventAutoHideAsync();
 
-const FONT_TIMEOUT_MS = 5000;
+const FONT_TIMEOUT_MS = 3000;
 
 class ErrorBoundary extends Component<{ children: ReactNode }> {
   state = { hasError: false };
@@ -68,8 +68,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     useLocationStore.getState().initialize();
-    useLocationStore.getState().startWatching();
-    useLocationStore.getState().reverseGeocodeCurrent();
+    setTimeout(() => {
+      useLocationStore.getState().startWatching();
+      useLocationStore.getState().reverseGeocodeCurrent();
+    }, 2000);
   }, []);
 
   useEffect(() => {
