@@ -11,7 +11,7 @@ interface PlaceOrderParams {
 
 export const ordersService = {
   async placeOrder(params: PlaceOrderParams): Promise<Order> {
-    const { data } = await api.post<ApiResponse<Order>>('/orders', {
+    const res = await api.post<ApiResponse<Order>>('/orders', {
       restaurantId: params.restaurantId,
       items: params.items.map((i) => ({
         menuItemId: i.menuItem.id,
@@ -22,22 +22,22 @@ export const ordersService = {
       deliveryAddress: params.deliveryAddress,
       specialInstructions: params.specialInstructions,
     });
-    return data.data;
+    return res.data.data;
   },
 
   async getHistory(): Promise<Order[]> {
-    const { data } = await api.get<ApiResponse<Order[]>>('/orders');
-    return data.data;
+    const res = await api.get<ApiResponse<Order[]>>('/orders');
+    return res.data.data;
   },
 
   async getById(id: string): Promise<Order> {
-    const { data } = await api.get<ApiResponse<Order>>(`/orders/${id}`);
-    return data.data;
+    const res = await api.get<ApiResponse<Order>>(`/orders/${id}`);
+    return res.data.data;
   },
 
   async trackOrder(id: string): Promise<TrackedOrder> {
-    const { data } = await api.get<ApiResponse<TrackedOrder>>(`/orders/${id}/track`);
-    return data.data;
+    const res = await api.get<ApiResponse<TrackedOrder>>(`/orders/${id}/track`);
+    return res.data.data;
   },
 
   async cancelOrder(id: string): Promise<void> {
@@ -49,12 +49,12 @@ export const ordersService = {
   },
 
   async reorder(orderId: string): Promise<Order> {
-    const { data } = await api.post<ApiResponse<Order>>(`/orders/${orderId}/reorder`);
-    return data.data;
+    const res = await api.post<ApiResponse<Order>>(`/orders/${orderId}/reorder`);
+    return res.data.data;
   },
 
   async assignDriver(orderId: string, driverId: string): Promise<Order> {
-    const { data } = await api.put<ApiResponse<Order>>(`/orders/${orderId}/assign-driver`, { driverId });
-    return data.data;
+    const res = await api.put<ApiResponse<Order>>(`/orders/${orderId}/assign-driver`, { driverId });
+    return res.data.data;
   },
 };

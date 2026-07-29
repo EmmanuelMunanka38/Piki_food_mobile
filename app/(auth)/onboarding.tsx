@@ -8,38 +8,40 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   TouchableOpacity,
+  Image,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { Image as ExpoImage } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Typography, Spacing, BorderRadius } from '@/constants/theme';
 
 const logo = require('@/assets/images/logo.png');
+const restPng = require('@/assets/images/rest.png');
+const locPng = require('@/assets/images/loc.png');
+const delPng = require('@/assets/images/del.png');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const slides = [
   {
     id: '1',
-    icon: 'map-marker' as const,
-    title: 'Discover Restaurants Nearby',
-    subtitle: 'Find top-rated local food, explore curated dining spots, and track locations near you in real-time.',
+    image: restPng,
+    title: 'Discover Amazing Restaurants',
+    subtitle: 'Find top-rated local restaurants, explore curated dining spots, and track locations near you in real-time.',
   },
   {
     id: '2',
-    icon: 'food-variant' as const,
-    title: 'Premium Dining at Home',
-    subtitle: 'Explore a curated selection of the finest restaurants across Dar es Salaam and Arusha.',
+    image: locPng,
+    title: 'Order From Anywhere',
+    subtitle: 'Browse menus and place orders from any location, anytime. Your next meal is just a tap away.',
   },
   {
     id: '3',
-    icon: 'silverware-fork-knife' as const,
-    title: 'Fast Delivery Across Tanzania',
-    subtitle: 'Your favorite local delicacies delivered to your doorstep in record time, every day.',
+    image: delPng,
+    title: 'Fast Delivery to Your Doorstep',
+    subtitle: 'Your favorite food delivered fresh and fast right to your doorstep, every single day.',
   },
 ];
-
-const allIcons = ['map-marker', 'food-variant', 'silverware-fork-knife'] as const;
 
 export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -66,39 +68,8 @@ export default function OnboardingScreen() {
   const renderSlide = ({ item }: { item: typeof slides[0] }) => {
     return (
       <View style={styles.slide}>
-        <View style={styles.heroSection}>
-          {allIcons.map((iconName, i) => {
-            const isHero = iconName === item.icon;
-            const size = isHero ? 64 : 28;
-            const containerSize = isHero ? 120 : 56;
-
-            return (
-              <Animated.View
-                key={iconName}
-                entering={isHero ? FadeIn.duration(400) : undefined}
-                style={[
-                  styles.iconBadge,
-                  {
-                    width: containerSize,
-                    height: containerSize,
-                    borderRadius: containerSize / 2,
-                    backgroundColor: isHero
-                      ? 'rgba(255,255,255,0.2)'
-                      : 'rgba(255,255,255,0.08)',
-                    borderColor: isHero
-                      ? 'rgba(255,255,255,0.3)'
-                      : 'rgba(255,255,255,0.12)',
-                  },
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name={iconName}
-                  size={size}
-                  color={isHero ? '#ffffff' : 'rgba(255,255,255,0.5)'}
-                />
-              </Animated.View>
-            );
-          })}
+        <View style={styles.imageContainer}>
+          <Image source={item.image} style={styles.image} resizeMode="contain" />
         </View>
 
         <Animated.View
@@ -122,7 +93,7 @@ export default function OnboardingScreen() {
       </TouchableOpacity>
 
       <View style={styles.brandTop}>
-        <Image source={logo} style={styles.brandLogo} contentFit="contain" />
+        <ExpoImage source={logo} style={styles.brandLogo} contentFit="contain" />
       </View>
 
       <FlatList
@@ -210,21 +181,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing['container-padding'],
   },
-  heroSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  imageContainer: {
+    flex: 1,
     justifyContent: 'center',
-    gap: Spacing.lg,
-    marginBottom: Spacing.xl + 16,
+    alignItems: 'center',
+    width: '100%',
   },
-  iconBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
+  image: {
+    width: SCREEN_WIDTH * 0.85,
+    height: SCREEN_WIDTH * 0.85,
   },
   textContent: {
     alignItems: 'center',
     gap: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
   title: {
     ...Typography.h1,

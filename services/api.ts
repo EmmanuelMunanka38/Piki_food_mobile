@@ -1,19 +1,8 @@
-// This is testing phase fix 101 , we can un comment it later 
-
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 
 export const API_ORIGIN = process.env.EXPO_PUBLIC_API_URL || 'https://zup-backend-dhkw.onrender.com';
 export const BASE_URL = `${API_ORIGIN}/api`;
-
-export const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -31,175 +20,138 @@ const processQueue = (error: any, token: string | null = null) => {
   });
   failedQueue = [];
 };
-// this is going to be changed 
-/*
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().token;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-*/
-// new api interceptor chnage :
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().token;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      // 2. Prevent sending stale/invalid Authorization headers on public routes
-      delete config.headers.Authorization;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
 
+class ApiError extends Error {
+  status: number;
+  body: any;
+  constructor(status: number, body: any) {
+    super(`API Error ${status}`);
+    this.status = status;
+    this.body = body;
+  }
+}
 
-// changing interceptor response logic :
-/*
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as any;
+async function refreshTokenFlow(): Promise<string> {
+  if (isRefreshing) {
+    return new Promise((resolve, reject) => {
+      failedQueue.push({ resolve, reject });
+    });
+  }
 
-    if (error.response?.status === 429 && !originalRequest._retry429) {
-      originalRequest._retry429 = true;
-      const delay = 1000 * Math.pow(2, (originalRequest._retryCount || 0));
-      originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
-      if (originalRequest._retryCount > 3) return Promise.reject(error);
+  const refreshToken = useAuthStore.getState().refreshToken;
+  if (!refreshToken) {
+    useAuthStore.getState().logout();
+    router.replace('/onboarding');
+    throw new Error('No refresh token');
+  }
+
+  isRefreshing = true;
+  try {
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) throw new Error('Refresh failed');
+    const json = await res.json();
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken } = json.data;
+
+    useAuthStore.getState().setToken(newAccessToken);
+    useAuthStore.getState().setRefreshToken(newRefreshToken);
+
+    processQueue(null, newAccessToken);
+    return newAccessToken;
+  } catch (refreshError) {
+    processQueue(refreshError, null);
+    useAuthStore.getState().logout();
+    router.replace('/onboarding');
+    throw refreshError;
+  } finally {
+    isRefreshing = false;
+  }
+}
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: any,
+  retryCount = 0,
+): Promise<{ data: T }> {
+  const url = `${BASE_URL}${path}`;
+  const token = useAuthStore.getState().token;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.status === 429 && retryCount < 3) {
+      const delay = 1000 * Math.pow(2, retryCount);
       await new Promise((r) => setTimeout(r, delay));
-      return api(originalRequest);
+      return request<T>(method, path, body, retryCount + 1);
     }
 
-    if (error.response?.status !== 401 || originalRequest._retry) {
-      return Promise.reject(error);
-    }
-
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({ resolve, reject });
-      }).then((token) => {
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-        return api(originalRequest);
-      });
-    }
-
-    originalRequest._retry = true;
-    isRefreshing = true;
-
-    const refreshToken = useAuthStore.getState().refreshToken;
-    if (!refreshToken) {
-      isRefreshing = false;
-      useAuthStore.getState().logout();
-      router.replace('/onboarding');
-      return Promise.reject(error);
-    }
-
-    try {
-      const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
-      const { accessToken: newAccessToken, refreshToken: newRefreshToken } = data.data;
-
-      useAuthStore.getState().setToken(newAccessToken);
-      useAuthStore.getState().setRefreshToken(newRefreshToken);
-
-      processQueue(null, newAccessToken);
-
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-      return api(originalRequest);
-    } catch (refreshError) {
-      processQueue(refreshError, null);
-      useAuthStore.getState().logout();
-      router.replace('/onboarding');
-      return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
-    }
-  },
-);*/
-
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as any;
-
-    // Safety guard if error.config is undefined (e.g., network error before config exists)
-    if (!originalRequest) {
-      return Promise.reject(error);
-    }
-
-    // 1. FIX: 429 Retry Logic using count instead of a boolean lock
-    if (error.response?.status === 429) {
-      originalRequest._retry429Count = originalRequest._retry429Count || 0;
-
-      if (originalRequest._retry429Count < 3) {
-        originalRequest._retry429Count += 1;
-        // Exponential backoff: 1s, 2s, 4s delay
-        const delay = 1000 * Math.pow(2, originalRequest._retry429Count - 1);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return api(originalRequest);
-      }
-    }
-
-    // 2. FIX: Exclude public auth endpoints from triggering 401 token refresh logic
-    const requestUrl = originalRequest.url || '';
     const isPublicAuthRoute =
-      requestUrl.includes('/auth/login') ||
-      requestUrl.includes('/auth/send-otp') ||
-      requestUrl.includes('/auth/verify-otp') ||
-      requestUrl.includes('/auth/refresh');
+      path.includes('/auth/login') ||
+      path.includes('/auth/send-otp') ||
+      path.includes('/auth/verify-otp') ||
+      path.includes('/auth/refresh');
 
-    if (error.response?.status !== 401 || originalRequest._retry || isPublicAuthRoute) {
-      return Promise.reject(error);
-    }
-
-    // 3. Handle concurrent requests during token refresh
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({ resolve, reject });
-      }).then((token) => {
-        originalRequest.headers = originalRequest.headers || {};
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-        return api(originalRequest);
+    if (response.status === 401 && !isPublicAuthRoute) {
+      const newToken = await refreshTokenFlow();
+      headers['Authorization'] = `Bearer ${newToken}`;
+      const retryRes = await fetch(url, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+      if (!retryRes.ok) {
+        throw new ApiError(retryRes.status, await retryRes.json().catch(() => ({})));
+      }
+      const json = await retryRes.json();
+      return { data: json };
     }
 
-    originalRequest._retry = true;
-    isRefreshing = true;
-
-    const refreshToken = useAuthStore.getState().refreshToken;
-    if (!refreshToken) {
-      isRefreshing = false;
-      useAuthStore.getState().logout();
-      router.replace('/onboarding');
-      return Promise.reject(error);
+    if (!response.ok) {
+      throw new ApiError(response.status, await response.json().catch(() => ({})));
     }
 
-    try {
-      const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
-      const { accessToken: newAccessToken, refreshToken: newRefreshToken } = data.data;
+    const json = await response.json();
+    return { data: json };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
 
-      useAuthStore.getState().setToken(newAccessToken);
-      useAuthStore.getState().setRefreshToken(newRefreshToken);
-
-      processQueue(null, newAccessToken);
-
-      originalRequest.headers = originalRequest.headers || {};
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-      return api(originalRequest);
-    } catch (refreshError) {
-      processQueue(refreshError, null);
-      useAuthStore.getState().logout();
-      router.replace('/onboarding');
-      return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
-    }
+export const api = {
+  get<T>(path: string) {
+    return request<T>('GET', path);
   },
-);
-
-
+  post<T>(path: string, body?: any) {
+    return request<T>('POST', path, body);
+  },
+  put<T>(path: string, body?: any) {
+    return request<T>('PUT', path, body);
+  },
+  delete<T>(path: string) {
+    return request<T>('DELETE', path);
+  },
+};

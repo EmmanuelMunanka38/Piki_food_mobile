@@ -12,23 +12,23 @@ interface DriverDashboardData {
 
 export const driverService = {
   async getRequests(): Promise<DeliveryRequest[]> {
-    const { data } = await api.get<ApiResponse<DeliveryRequest[]>>('/driver/requests');
-    return data.data;
+    const res = await api.get<ApiResponse<DeliveryRequest[]>>('/driver/requests');
+    return res.data.data;
   },
 
   async acceptRequest(id: string): Promise<DeliveryRequest> {
-    const { data } = await api.post<ApiResponse<DeliveryRequest>>(`/driver/requests/${id}/accept`);
-    return data.data;
+    const res = await api.post<ApiResponse<DeliveryRequest>>(`/driver/requests/${id}/accept`);
+    return res.data.data;
   },
 
   async getActive(): Promise<DeliveryRequest | null> {
-    const { data } = await api.get<ApiResponse<DeliveryRequest | null>>('/driver/active');
-    return data.data;
+    const res = await api.get<ApiResponse<DeliveryRequest | null>>('/driver/active');
+    return res.data.data;
   },
 
   async getDashboard(): Promise<DriverDashboardData> {
-    const { data } = await api.get<ApiResponse<DriverDashboardData>>('/driver/dashboard');
-    return data.data;
+    const res = await api.get<ApiResponse<DriverDashboardData>>('/driver/dashboard');
+    return res.data.data;
   },
 
   async updateOrderStatus(orderId: string, status: string): Promise<void> {

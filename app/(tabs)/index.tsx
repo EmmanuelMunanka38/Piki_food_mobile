@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import OptimizedImage from '@/components/ui/OptimizedImage';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import { formatPrice } from '@/utils/format';
 import { useRestaurantStore } from '@/store/restaurantStore';
+import { MenuItem } from '@/types';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { CategorySkeleton, RestaurantCardSkeleton } from '@/components/ui/SkeletonLoader';
@@ -78,10 +79,17 @@ export default function HomeScreen() {
     }
   }, [restaurants, loadAllMenus]);
 
-  const recommendedItems = useMemo(() => {
-    const allItems = restaurants.flatMap((r) => (r.menu || []).map((m) => ({ ...m, restaurantId: r.id })));
-    allItems.sort(() => 0.5 - Math.random());
-    return allItems.slice(0, 4);
+  const [recommendedItems, setRecommendedItems] = useState<Array<MenuItem & { restaurantId: string }>>([]);
+
+  useEffect(() => {
+    const shuffle = () => {
+      const allItems = restaurants.flatMap((r) => (r.menu || []).map((m) => ({ ...m, restaurantId: r.id })));
+      const shuffled = [...allItems].sort(() => 0.5 - Math.random());
+      setRecommendedItems(shuffled.slice(0, 4));
+    };
+    shuffle();
+    const interval = setInterval(shuffle, 15000);
+    return () => clearInterval(interval);
   }, [restaurants]);
 
   const handleRefresh = useCallback(async () => {

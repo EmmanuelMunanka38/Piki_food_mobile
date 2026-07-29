@@ -1,7 +1,5 @@
 import { api } from './api';
-/**
- * I think the auth erros is from here this auth api implementation .
- */
+
 export const authService = {
   async sendOtp(email: string, phone: string, role?: string): Promise<void> {
     await api.post('/auth/send-otp', { email, phone, role });
@@ -16,26 +14,26 @@ export const authService = {
     const body: any = { email, code };
     if (name) body.name = name;
     if (role) body.role = role;
-    const { data } = await api.post('/auth/verify-otp', body);
+    const res = await api.post<any>('/auth/verify-otp', body);
     return {
-      user: data.data.user,
-      accessToken: data.data.accessToken,
-      refreshToken: data.data.refreshToken,
+      user: res.data.data.user,
+      accessToken: res.data.data.accessToken,
+      refreshToken: res.data.data.refreshToken,
     };
   },
 
   async refreshToken(token: string): Promise<{ accessToken: string; refreshToken: string }> {
-    const { data } = await api.post('/auth/refresh', { refreshToken: token });
-    return data.data;
+    const res = await api.post<any>('/auth/refresh', { refreshToken: token });
+    return res.data.data;
   },
 
   async getProfile(): Promise<any> {
-    const { data } = await api.get('/auth/profile');
-    return data.data;
+    const res = await api.get<any>('/auth/profile');
+    return res.data.data;
   },
 
   async updateProfile(data: { name?: string; email?: string; avatar?: string }): Promise<any> {
-    const { data: res } = await api.put('/auth/profile', data);
+    const res = await api.put<any>('/auth/profile', data);
     return res.data;
   },
 

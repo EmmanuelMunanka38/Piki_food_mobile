@@ -1,11 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Typography, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
-
-const logo = require('@/assets/images/logo.png');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -59,7 +56,7 @@ export default function SplashScreen() {
 
     Animated.timing(barAnim, {
       toValue: 1,
-      duration: 1400,
+      duration: 3000,
       useNativeDriver: false,
     }).start(() => {
       if (navigatedRef.current) return;
@@ -134,13 +131,10 @@ export default function SplashScreen() {
           },
         ]}
       >
-        <View style={styles.logoContainer}>
-          <View style={styles.logoInner}>
-            <Image source={logo} style={styles.logoImage} contentFit="contain" />
-          </View>
-        </View>
-        <View style={styles.brandWrapper}>
-          <Text style={styles.brandName}>Piki Food</Text>
+        <View style={styles.logoStack}>
+          <Text style={styles.logoPiki}>PIKI</Text>
+          <View style={styles.logoDivider} />
+          <Text style={styles.logoFood}>FOOD</Text>
         </View>
         <Text style={styles.tagline}>Haraka Sana</Text>
       </Animated.View>
@@ -233,42 +227,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
   },
-  logoContainer: {
-    width: 104,
-    height: 104,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 28,
-    elevation: 12,
-  },
-  logoInner: {
-    width: 88,
-    height: 88,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 52,
-    height: 52,
-  },
   brandWrapper: {
     alignItems: 'center',
   },
-  brandName: {
-    ...Typography.display,
+  logoStack: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  logoDivider: {
+    width: 40,
+    height: 3,
+    backgroundColor: '#fdc003',
+    borderRadius: 2,
+    marginVertical: 2,
+  },
+  logoPiki: {
+    fontSize: 56,
+    fontWeight: '900',
+    color: '#fdc003',
+    letterSpacing: 8,
+    lineHeight: 60,
+  },
+  logoFood: {
+    fontSize: 28,
+    fontWeight: '600',
     color: '#ffffff',
-    fontSize: 44,
-    lineHeight: 50,
-    letterSpacing: -0.5,
+    letterSpacing: 12,
+    lineHeight: 32,
   },
   tagline: {
     ...Typography['label-md'],

@@ -83,13 +83,18 @@ export default function RootLayout() {
   const fontsReady = fontsLoaded || fontError || fontTimedOut;
   const ready = fontsReady && hydrated;
 
+  const [showApp, setShowApp] = useState(false);
   useEffect(() => {
     if (ready) {
-      SplashScreen.hideAsync();
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync();
+        setShowApp(true);
+      }, 2000);
+      return () => clearTimeout(timer);
     }
   }, [ready]);
 
-  if (!ready) return null;
+  if (!ready || !showApp) return null;
 
   return (
     <ErrorBoundary>
