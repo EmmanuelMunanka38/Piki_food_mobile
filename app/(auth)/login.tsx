@@ -2,11 +2,15 @@ import { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   KeyboardAvoidingView, Platform, TextInput, ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 function detectRole(phone: string): { role: 'customer' | 'driver' | 'restaurant_owner'; prefix: string; number: string } {
   const clean = phone.replace(/[\s-]/g, '');
@@ -22,7 +26,7 @@ const roleConfig = {
 } as const;
 
 export default function AuthScreen() {
-  const { mode: modeParam, type } = useLocalSearchParams<{ mode?: string; type?: string }>();
+  const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
   const theme = 'light';
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>(modeParam === 'sign-up' ? 'sign-up' : 'sign-in');
   const [email, setEmail] = useState('');
@@ -46,7 +50,7 @@ export default function AuthScreen() {
       if (!isEmailValid) {
         setError('Please enter a valid email address');
       } else if (!isPhoneValid) {
-        setError('Enter D or R prefix followed by your number (e.g. D+2557XXXXXXXX)');
+        setError('Enter a valid phone number (e.g. +255712345678 or D+255712345678)');
       } else if (mode === 'sign-up' && !isNameValid) {
         setError('Name must be at least 2 characters');
       }
@@ -57,7 +61,6 @@ export default function AuthScreen() {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = numberPart;
-    const displayPhone = phone.trim();
 
     try {
       await sendOtp(cleanEmail, cleanPhone, detected.role);
@@ -74,37 +77,46 @@ export default function AuthScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, email, phone, mode, name, sendOtp, detected]);
+  }, [canSubmit, email, mode, name, sendOtp, detected, isEmailValid, isPhoneValid, isNameValid, numberPart]);
 
   const switchMode = useCallback(() => {
     setMode((m) => (m === 'sign-in' ? 'sign-up' : 'sign-in'));
     setError('');
   }, []);
 
+  const handleGoogleLogin = () => {
+    // TODO: implement Google login
+  };
+
+  const handleAppleLogin = () => {
+    // TODO: implement Apple login
+  };
+
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: Colors[theme].background }]}
+      style={[styles.container, { backgroundColor: 'transparent' }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <View style={[styles.backButtonInner, { backgroundColor: Colors[theme]['surface-container-low'] }]}>
-            <MaterialCommunityIcons name="arrow-left" size={22} color={Colors[theme]['on-surface']} />
-          </View>
-        </TouchableOpacity>
+      <Image
+        source={{ uri: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=900&q=85' }}
+        style={[styles.bgImage, { width: SCREEN_W, height: SCREEN_H }]}
+        contentFit="cover"
+      />
 
-        <View style={styles.header}>
-          <View style={[styles.brandIcon, { backgroundColor: Colors[theme].primary }]}>
-            <MaterialCommunityIcons name="moped" size={32} color="#ffffff" />
-          </View>
-          <Text style={[styles.brandName, { color: Colors[theme].primary }]}>Piki Food</Text>
+      <TouchableOpacity onPress={() => router.replace('/onboarding')} style={styles.backButton}>
+        <View style={[styles.backButtonInner, { backgroundColor: Colors[theme]['surface-container-low'] }]}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color={Colors[theme]['on-surface']} />
         </View>
+      </TouchableOpacity>
 
-        <View style={[styles.card, { backgroundColor: Colors[theme].surface }]}>
+      <View style={styles.bottomSheet}>
+        <View style={styles.handle} />
+
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.toggleRow}>
             <TouchableOpacity
               style={[
@@ -143,12 +155,12 @@ export default function AuthScreen() {
           </View>
 
           <Text style={[styles.title, { color: Colors[theme]['on-surface'] }]}>
-            {mode === 'sign-in' ? 'Welcome back' : type === 'agent' ? 'Agent Login' : 'Create account'}
+            {mode === 'sign-in' ? 'Welcome back' : 'Create account'}
           </Text>
           <Text style={[styles.subtitle, { color: Colors[theme]['on-surface-variant'] }]}>
             {mode === 'sign-in'
-              ? 'Enter your email and phone to receive a code'
-              : 'Enter your details to get started'}
+              ? 'Enter your details to receive a verification code'
+              : 'Fill in your details to get started'}
           </Text>
 
           {error ? (
@@ -167,7 +179,7 @@ export default function AuthScreen() {
                 <MaterialCommunityIcons name="account-outline" size={20} color={Colors[theme]['on-surface-variant']} />
                 <TextInput
                   style={[styles.input, { color: Colors[theme]['on-surface'] }]}
-                  placeholder="Name"
+                  placeholder="John Doe"
                   placeholderTextColor={Colors[theme]['on-surface-variant'] + '80'}
                   value={name}
                   onChangeText={setName}
@@ -202,13 +214,14 @@ export default function AuthScreen() {
             </Text>
             <View style={[styles.inputWrap, { backgroundColor: Colors[theme]['surface-container-low'], borderColor: phone ? (isPhoneValid ? Colors[theme].primary : Colors[theme].tertiary) : Colors[theme]['outline-variant'] }]}>
               <MaterialCommunityIcons name="phone-outline" size={20} color={Colors[theme]['on-surface-variant']} />
+              <Text style={[styles.phonePrefix, { color: Colors[theme]['on-surface-variant'] }]}>+255</Text>
               <TextInput
                 style={[styles.input, { color: Colors[theme]['on-surface'] }]}
-                placeholder="+255 7## ### ###"
+                placeholder="712 345 678"
                 placeholderTextColor={Colors[theme]['on-surface-variant'] + '80'}
                 value={phone}
                 onChangeText={setPhone}
-                keyboardType="default"
+                keyboardType="phone-pad"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -241,48 +254,152 @@ export default function AuthScreen() {
               </Text>
             )}
           </TouchableOpacity>
-        </View>
 
-        <View style={styles.switchRow}>
-          <Text style={[styles.switchText, { color: Colors[theme]['on-surface-variant'] }]}>
-            {mode === 'sign-in' ? 'No account yet?' : 'Already registered?'}
-          </Text>
-          <TouchableOpacity onPress={switchMode}>
-            <Text style={[styles.switchLink, { color: Colors[theme].primary }]}>
-              {mode === 'sign-in' ? 'Sign Up' : 'Sign In'}
+          <View style={styles.dividerRow}>
+            <View style={[styles.dividerLine, { backgroundColor: Colors[theme]['outline-variant'] }]} />
+            <Text style={[styles.dividerText, { color: Colors[theme]['on-surface-variant'] }]}>or</Text>
+            <View style={[styles.dividerLine, { backgroundColor: Colors[theme]['outline-variant'] }]} />
+          </View>
+
+          <View style={styles.socialRow}>
+            <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleLogin} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="google" size={22} color="#4285F4" />
+              <Text style={[styles.socialBtnText, { color: Colors[theme]['on-surface'] }]}>Google</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.socialBtn} onPress={handleAppleLogin} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="apple" size={22} color="#000000" />
+              <Text style={[styles.socialBtnText, { color: Colors[theme]['on-surface'] }]}>Apple</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.switchRow}>
+            <Text style={[styles.switchText, { color: Colors[theme]['on-surface-variant'] }]}>
+              {mode === 'sign-in' ? 'No account yet?' : 'Already registered?'}
             </Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity onPress={switchMode}>
+              <Text style={[styles.switchLink, { color: Colors[theme].primary }]}>
+                {mode === 'sign-in' ? 'Sign Up' : 'Sign In'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-        <Text style={[styles.terms, { color: Colors[theme]['on-surface-variant'] }]}>
-          By continuing, you agree to Piki's Terms of Service and Privacy Policy.
-        </Text>
-      </ScrollView>
+          <Text style={[styles.terms, { color: Colors[theme]['on-surface-variant'] }]}>
+            By continuing, you agree to Piki{"'"}s Terms of Service and Privacy Policy.
+          </Text>
+        </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flexGrow: 1, paddingHorizontal: Spacing['container-padding'], paddingBottom: Spacing.xl },
-  backButton: { marginTop: 60, marginBottom: Spacing.md },
-  backButtonInner: { width: 40, height: 40, borderRadius: BorderRadius.full, alignItems: 'center', justifyContent: 'center' },
-  header: { alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.xl },
-  brandIcon: { width: 64, height: 64, borderRadius: BorderRadius.xl, alignItems: 'center', justifyContent: 'center', ...Shadows.md },
-  brandName: { ...Typography.h1, fontSize: 28 },
-  card: { borderRadius: 24, padding: Spacing.xl, borderWidth: 1, borderColor: Colors.light['outline-variant'], gap: Spacing.md, ...Shadows.md },
-  toggleRow: { flexDirection: 'row', backgroundColor: Colors.light['surface-container-low'], borderRadius: BorderRadius.full, padding: 4 },
+  container: { flex: 1, backgroundColor: 'transparent' },
+  bgImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: -2,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 56,
+    left: Spacing['container-padding'],
+    zIndex: 20,
+  },
+  backButtonInner: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomSheet: {
+    flex: 1,
+    marginTop: 220,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: Spacing['container-padding'],
+    paddingTop: Spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e0e0e0',
+    alignSelf: 'center',
+    marginBottom: Spacing.md,
+  },
+  scrollContent: { paddingBottom: Spacing.xl },
+  toggleRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.light['surface-container-low'],
+    borderRadius: BorderRadius.full,
+    padding: 4,
+    marginBottom: Spacing.md,
+  },
   toggleBtn: { flex: 1, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, alignItems: 'center' },
   toggleText: { ...Typography['label-md'], fontWeight: '600' },
-  title: { ...Typography.h1, fontSize: 26, marginTop: Spacing.sm },
-  subtitle: { ...Typography['body-sm'], marginTop: -Spacing.sm },
+  socialRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  socialBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderColor: Colors.light['outline-variant'],
+    backgroundColor: Colors.light['surface-container-low'],
+  },
+  socialBtnText: { ...Typography['label-md'], fontWeight: '600' },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { ...Typography['body-sm'] },
+  title: { ...Typography.h1, fontSize: 26 },
+  subtitle: { ...Typography['body-sm'], marginTop: Spacing.xs, marginBottom: Spacing.md },
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md },
   errorText: { ...Typography['body-sm'], flex: 1 },
-  inputGroup: { gap: Spacing.xs },
+  inputGroup: { gap: Spacing.xs, marginBottom: Spacing.md },
   inputLabel: { ...Typography['label-sm'], fontWeight: '500', marginLeft: 4 },
-  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.xl, borderWidth: 1.5, height: 52 },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    height: 52,
+  },
   input: { flex: 1, ...Typography['body-md'], height: '100%' },
-  submitBtn: { paddingVertical: Spacing.md, borderRadius: BorderRadius.full, alignItems: 'center', justifyContent: 'center', height: 52 },
+  phonePrefix: { ...Typography['body-md'], marginRight: Spacing.xs },
+  submitBtn: {
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    shadowColor: '#006d36',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
   submitText: { ...Typography['label-md'], fontWeight: '700', fontSize: 16 },
   switchRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.xs, marginTop: Spacing.lg },
   switchText: { ...Typography['body-md'] },

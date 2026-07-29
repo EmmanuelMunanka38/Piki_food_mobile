@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { PikiButton } from '@/components/ui/PikiButton';
 import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { Images } from '@/constants/images';
 import { useAuthStore } from '@/store/authStore';
+
+const logo = require('@/assets/images/logo.png');
 
 function routeByRole(role: string) {
   switch (role) {
@@ -121,7 +124,7 @@ export default function VerifyOTPScreen() {
         <View style={[styles.card, { backgroundColor: Colors[theme].surface }]}>
           <View style={styles.brandSection}>
             <View style={[styles.brandIcon, { backgroundColor: Colors[theme]['primary-container'] }]}>
-              <MaterialCommunityIcons name="silverware-fork-knife" size={32} color="#ffffff" />
+              <Image source={logo} style={styles.brandLogoImage} contentFit="contain" />
             </View>
             <Text style={[styles.brandName, { color: Colors[theme]['on-surface'] }]}>Piki Food</Text>
           </View>
@@ -223,6 +226,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 24, padding: Spacing.xl, borderWidth: 1, borderColor: '#e5e2e1', alignItems: 'center', gap: Spacing.lg, shadowColor: '#0fa958', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 24, elevation: 4 },
   brandSection: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, alignSelf: 'flex-start' },
   brandIcon: { width: 48, height: 48, borderRadius: BorderRadius.xl, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.light['primary-container'], shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  brandLogoImage: { width: 32, height: 32 },
   brandName: { ...Typography.h2 },
   title: { ...Typography.h1, marginBottom: -Spacing.sm, textAlign: 'center' },
   subtitle: { ...Typography['body-md'], textAlign: 'center', lineHeight: 24, paddingHorizontal: Spacing.md },

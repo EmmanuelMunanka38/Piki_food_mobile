@@ -18,13 +18,13 @@ export interface BackendCart {
 
 export const cartService = {
   async getCart(): Promise<BackendCart> {
-    const { data } = await api.get('/cart');
-    return data.data;
+    const res = await api.get<any>('/cart');
+    return res.data.data;
   },
 
   async addItem(restaurantId: string, menuItemId: string, quantity: number = 1): Promise<BackendCart> {
-    const { data } = await api.post('/cart/add', { restaurantId, menuItemId, quantity });
-    return data.data;
+    const res = await api.post<any>('/cart/add', { restaurantId, menuItemId, quantity });
+    return res.data.data;
   },
 
   async updateItemQuantity(itemId: string, quantity: number): Promise<void> {

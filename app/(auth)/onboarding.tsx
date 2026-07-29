@@ -7,75 +7,93 @@ import {
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  TouchableOpacity,
   Image,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { PikiButton } from '@/components/ui/PikiButton';
-import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Typography, Spacing, BorderRadius } from '@/constants/theme';
 
-const { width } = Dimensions.get('window');
+const logo = require('@/assets/images/logo.png');
+const restPng = require('@/assets/images/rest.png');
+const locPng = require('@/assets/images/loc.png');
+const delPng = require('@/assets/images/del.png');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const slides = [
   {
     id: '1',
-    image: require('@/assets/images/fast-food-bro.png'),
-    title: 'Delicious Fast Food',
-    subtitle: 'Enjoy a wide variety of burgers, fries, and your favorite fast food meals, all in one place. From classic beef burgers to crispy chicken wraps, we have something for every craving. Satisfy your hunger with our quickly prepared and freshly served meals that bring the taste of your favorite fast food joints straight to you.',
+    image: restPng,
+    title: 'Discover Amazing Restaurants',
+    subtitle: 'Find top-rated local restaurants, explore curated dining spots, and track locations near you in real-time.',
   },
   {
     id: '2',
-    image: require('@/assets/images/Take-Away-pana.png'),
-    title: 'Easy Take Away',
-    subtitle: 'Order your favorite meals and pick them up on the go, quickly and conveniently. Skip the wait and enjoy restaurant-quality food wherever you are. With just a few taps, you can browse menus, place your order, and have your food ready for pickup at your convenience, making your busy schedule a little easier to manage.',
+    image: locPng,
+    title: 'Order From Anywhere',
+    subtitle: 'Browse menus and place orders from any location, anytime. Your next meal is just a tap away.',
   },
   {
     id: '3',
-    image: require('@/assets/images/Chef-bro.png'),
-    title: 'Prepared by Expert Chefs',
-    subtitle: 'Every dish is carefully prepared by skilled chefs using the freshest ingredients sourced from local markets. From traditional Tanzanian flavors to international cuisine, our chefs bring passion and expertise to every plate. Taste the difference that professional culinary craftsmanship makes in every single bite you take.',
+    image: delPng,
+    title: 'Fast Delivery to Your Doorstep',
+    subtitle: 'Your favorite food delivered fresh and fast right to your doorstep, every single day.',
   },
 ];
 
 export default function OnboardingScreen() {
-  const theme = 'light';
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const isLastSlide = currentIndex === slides.length - 1;
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / width);
+    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setCurrentIndex(index);
   };
 
-  const handleSignUp = () => {
-    router.replace('/login?mode=sign-up');
+  const handleNext = () => {
+    if (isLastSlide) {
+      router.replace('/login?mode=sign-up');
+    } else {
+      flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
+    }
   };
 
-  const handleLogin = () => {
+  const handleSkip = () => {
     router.replace('/login?mode=sign-in');
   };
 
-  const renderSlide = ({ item }: { item: typeof slides[0] }) => (
-    <View style={styles.slide}>
-      <View style={styles.imageWrapper}>
-        <Image source={item.image} style={styles.image} resizeMode="contain" />
+  const renderSlide = ({ item }: { item: typeof slides[0] }) => {
+    return (
+      <View style={styles.slide}>
+        <View style={styles.imageContainer}>
+          <Image source={item.image} style={styles.image} resizeMode="contain" />
+        </View>
+
+        <Animated.View
+          key={`text-${item.id}`}
+          entering={FadeInDown.duration(500).delay(100)}
+          style={styles.textContent}
+        >
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.subtitle}>{item.subtitle}</Text>
+        </Animated.View>
       </View>
-      <View style={styles.slideContent}>
-        <Text style={[styles.title, { color: Colors[theme]['on-surface'] }]}>
-          {item.title}
-        </Text>
-        <Text style={[styles.subtitle, { color: Colors[theme]['on-surface-variant'] }]}>
-          {item.subtitle}
-        </Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors[theme].surface }]}>
-      <View style={styles.header}>
-        <Text style={[styles.brandName, { color: Colors[theme].primary }]}>
-          Piki Food
+    <View style={styles.container}>
+      <TouchableOpacity onPress={handleSkip} style={styles.skipButton} activeOpacity={0.7}>
+        <Text style={[styles.skipText, { opacity: isLastSlide ? 0 : 1 }]}>
+          Skip
         </Text>
+      </TouchableOpacity>
+
+      <View style={styles.brandTop}>
+        <ExpoImage source={logo} style={styles.brandLogo} contentFit="contain" />
       </View>
 
       <FlatList
@@ -88,6 +106,7 @@ export default function OnboardingScreen() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         bounces={false}
+        keyExtractor={(item) => item.id}
       />
 
       <View style={styles.footer}>
@@ -100,27 +119,27 @@ export default function OnboardingScreen() {
                 {
                   backgroundColor:
                     index === currentIndex
-                      ? Colors[theme].primary
-                      : Colors[theme]['surface-variant'],
+                      ? '#ffffff'
+                      : 'rgba(255,255,255,0.3)',
+                  width: index === currentIndex ? 28 : 10,
                 },
               ]}
             />
           ))}
         </View>
 
-        <View style={styles.actions}>
-          <PikiButton
-            title="Sign Up"
-            onPress={handleSignUp}
-            fullWidth
-          />
-          <PikiButton
-            title="Login"
-            variant="outline"
-            onPress={handleLogin}
-            fullWidth
-          />
-        </View>
+        <TouchableOpacity
+          onPress={handleNext}
+          style={styles.nextButton}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.nextButtonText}>
+            {isLastSlide ? 'Get Started' : 'Next'}
+          </Text>
+          {!isLastSlide && (
+            <MaterialCommunityIcons name="arrow-right" size={20} color="#006d36" />
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -129,68 +148,102 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#006d36',
   },
-  header: {
+  skipButton: {
     position: 'absolute',
     top: 60,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    right: Spacing['container-padding'],
+    zIndex: 20,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+  },
+  skipText: {
+    ...Typography['label-md'],
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
+  },
+  brandTop: {
+    position: 'absolute',
+    top: 56,
+    left: Spacing['container-padding'],
     zIndex: 20,
   },
-  brandName: {
-    ...Typography.display,
-    fontSize: 28,
-    letterSpacing: -0.3,
+  brandLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
   },
   slide: {
-    width,
+    width: SCREEN_WIDTH,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing['container-padding'],
+  },
+  imageContainer: {
     flex: 1,
     justifyContent: 'center',
-    paddingTop: 60,
-  },
-  imageWrapper: {
-    width: 220,
-    height: 220,
-    alignSelf: 'center',
-    marginBottom: Spacing.md,
+    alignItems: 'center',
+    width: '100%',
   },
   image: {
-    width: '100%',
-    height: '100%',
+    width: SCREEN_WIDTH * 0.85,
+    height: SCREEN_WIDTH * 0.85,
   },
-  slideContent: {
-    paddingHorizontal: Spacing['container-padding'],
-    paddingBottom: Spacing.xl,
+  textContent: {
     alignItems: 'center',
+    gap: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
   title: {
     ...Typography.h1,
+    fontSize: 28,
+    lineHeight: 34,
+    color: '#ffffff',
     textAlign: 'center',
-    marginBottom: Spacing.sm,
+    fontWeight: '700',
   },
   subtitle: {
     ...Typography['body-md'],
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: Spacing.md,
+    maxWidth: 300,
   },
   footer: {
     paddingHorizontal: Spacing['container-padding'],
-    paddingBottom: 60,
+    paddingBottom: 64,
     gap: Spacing.lg,
   },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: Spacing.sm,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    height: 10,
+    borderRadius: 5,
   },
-  actions: {
+  nextButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: Spacing.sm,
+    backgroundColor: '#ffffff',
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  nextButtonText: {
+    ...Typography['label-md'],
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#006d36',
   },
 });

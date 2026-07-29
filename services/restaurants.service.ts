@@ -3,49 +3,49 @@ import { Restaurant, MenuItem, Category, ApiResponse, User } from '@/types';
 
 export const restaurantsService = {
   async create(data: Partial<Restaurant>): Promise<Restaurant> {
-    const { data: res } = await api.post<ApiResponse<Restaurant>>('/restaurants', data);
-    return res.data;
+    const res = await api.post<ApiResponse<Restaurant>>('/restaurants', data);
+    return res.data.data;
   },
 
   async getAll(): Promise<Restaurant[]> {
-    const { data } = await api.get<ApiResponse<Restaurant[]>>('/restaurants');
-    return data.data;
+    const res = await api.get<ApiResponse<Restaurant[]>>('/restaurants');
+    return res.data.data;
   },
 
   async getByOwner(ownerId: string): Promise<Restaurant[]> {
-    const { data } = await api.get<ApiResponse<Restaurant[]>>(`/restaurants?ownerId=${ownerId}`);
-    return data.data;
+    const res = await api.get<ApiResponse<Restaurant[]>>(`/restaurants?ownerId=${ownerId}`);
+    return res.data.data;
   },
 
   async getById(id: string): Promise<Restaurant> {
-    const { data } = await api.get<ApiResponse<any>>(`/restaurants/${id}`);
-    return data.data;
+    const res = await api.get<ApiResponse<any>>(`/restaurants/${id}`);
+    return res.data.data;
   },
 
   async getMenu(restaurantId: string, includeUnavailable = false): Promise<MenuItem[]> {
     const params = includeUnavailable ? '?includeUnavailable=true' : '';
-    const { data } = await api.get<ApiResponse<MenuItem[]>>(`/restaurants/${restaurantId}/menu${params}`);
-    return data.data;
+    const res = await api.get<ApiResponse<MenuItem[]>>(`/restaurants/${restaurantId}/menu${params}`);
+    return res.data.data;
   },
 
   async getCategories(): Promise<Category[]> {
-    const { data } = await api.get<ApiResponse<Category[]>>('/categories');
-    return data.data;
+    const res = await api.get<ApiResponse<Category[]>>('/categories');
+    return res.data.data;
   },
 
   async getFeatured(): Promise<Restaurant[]> {
-    const { data } = await api.get<ApiResponse<Restaurant[]>>('/restaurants/featured');
-    return data.data;
+    const res = await api.get<ApiResponse<Restaurant[]>>('/restaurants/featured');
+    return res.data.data;
   },
 
   async createMenuItem(restaurantId: string, item: Partial<MenuItem>): Promise<MenuItem> {
-    const { data } = await api.post<ApiResponse<MenuItem>>(`/restaurants/${restaurantId}/menu`, item);
-    return data.data;
+    const res = await api.post<ApiResponse<MenuItem>>(`/restaurants/${restaurantId}/menu`, item);
+    return res.data.data;
   },
 
   async updateMenuItem(menuId: string, updates: Partial<MenuItem>): Promise<MenuItem> {
-    const { data } = await api.put<ApiResponse<MenuItem>>(`/restaurants/menu/${menuId}`, updates);
-    return data.data;
+    const res = await api.put<ApiResponse<MenuItem>>(`/restaurants/menu/${menuId}`, updates);
+    return res.data.data;
   },
 
   async deleteMenuItem(menuId: string): Promise<void> {
@@ -53,12 +53,12 @@ export const restaurantsService = {
   },
 
   async update(id: string, data: Partial<Restaurant>): Promise<Restaurant> {
-    const { data: res } = await api.put<ApiResponse<Restaurant>>(`/restaurants/${id}`, data);
-    return res.data;
+    const res = await api.put<ApiResponse<Restaurant>>(`/restaurants/${id}`, data);
+    return res.data.data;
   },
 
   async getDrivers(): Promise<User[]> {
-    const { data } = await api.get<ApiResponse<User[]>>('/users/drivers');
-    return data.data;
+    const res = await api.get<ApiResponse<User[]>>('/users/drivers');
+    return res.data.data;
   },
 };
