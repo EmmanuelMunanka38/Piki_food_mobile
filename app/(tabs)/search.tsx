@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import { formatPrice } from '@/utils/format';
 import OptimizedImage from '@/components/ui/OptimizedImage';
-import { useRestaurantStore } from '@/store/restaurantStore';
+import { useRestaurants } from '@/hooks/use-restaurants';
 
 const { width } = Dimensions.get('window');
 const GRID_GAP = Spacing.md;
@@ -26,13 +25,7 @@ const popularSearches = ['Pizza', 'Swahili', 'Burgers', 'Juice', 'Pilau', 'Seafo
 export default function SearchScreen() {
   const theme = 'light';
   const [query, setQuery] = useState('');
-  const { restaurants, loadRestaurants } = useRestaurantStore();
-
-  useEffect(() => {
-    if (restaurants.length === 0) {
-      loadRestaurants();
-    }
-  }, [restaurants.length, loadRestaurants]);
+  const { data: restaurants = [] } = useRestaurants();
 
   const allMenuItems = useMemo(
     () => restaurants.flatMap((r) => r.menu || []),
@@ -137,7 +130,7 @@ export default function SearchScreen() {
           <View style={styles.emptyState}>
             <MaterialCommunityIcons name="food-off" size={64} color={Colors[theme]['surface-container']} />
             <Text style={[styles.emptyTitle, { color: Colors[theme]['on-surface'] }]}>
-              No results for "{query}"
+              {`No results for "${query}"`}
             </Text>
             <Text style={[styles.emptySubtitle, { color: Colors[theme]['on-surface-variant'] }]}>
               Try a different search term or browse categories
