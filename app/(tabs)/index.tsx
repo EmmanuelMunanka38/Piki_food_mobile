@@ -1,54 +1,136 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
-  RefreshControl,
+  Animated,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import OptimizedImage from '@/components/ui/OptimizedImage';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import { formatPrice } from '@/utils/format';
-import { useRestaurantStore } from '@/store/restaurantStore';
-import { MenuItem } from '@/types';
-import { useCartStore } from '@/store/cartStore';
-import { useAuthStore } from '@/store/authStore';
+import { MenuItem, Restaurant, Category } from '@/types';
+import {
+  useRestaurants,
+  useFeaturedRestaurants,
+  useCategories,
+  useRestaurantMenus,
+  getErrorMessage,
+  restaurantKeys,
+  categoryKeys,
+} from '@/hooks/use-restaurants';
 import { CategorySkeleton, RestaurantCardSkeleton } from '@/components/ui/SkeletonLoader';
+import BrandedHeader from '@/components/BrandedHeader';
+import DealCard from '@/components/DealCard';
+import { useAuthStore } from '@/store/authStore';
+import { useCartStore } from '@/store/cartStore';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.7;
+const POPULAR_CARD_STEP = CARD_WIDTH + Spacing.lg;
+const POPULAR_AUTOPLAY_MS = 3500;
+const REC_CARD_WIDTH = Math.round(width * 0.66);
+const REC_CARD_GAP = Spacing.md;
+const NO_RESTAURANTS: Restaurant[] = [];
+const NO_FEATURED: Restaurant[] = [];
+const NO_CATEGORIES: Category[] = [];
+
+const SESSION_RANDOM = Math.random();
+const RECOMMENDED_COUNT = 4;
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 
 
 export default function HomeScreen() {
   const theme = 'light';
+  const queryClient = useQueryClient();
+  const addItem = useCartStore((s) => s.addItem);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const { restaurants, categories, featured, isLoading, error, loadRestaurants, loadCategories, loadFeatured, loadAllMenus } = useRestaurantStore();
-  const items = useCartStore((s) => s.items);
-  const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
-  const user = useAuthStore((s) => s.user);
-  const getGreeting = () => {
-    const h = new Date(Date.now() + 3 * 3600000).getUTCHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
+  const { data: restaurants = NO_RESTAURANTS, isPending: restaurantsPending, error: restaurantsError } = useRestaurants();
+  const { data: featured = NO_FEATURED, isPending: featuredPending, error: featuredError } = useFeaturedRestaurants();
+  const { data: categories = NO_CATEGORIES, isPending: categoriesPending, error: categoriesError } = useCategories();
+  const isLoading = restaurantsPending || (featuredPending && featured.length === 0) || (categoriesPending && categories.length === 0);
+  const error = restaurantsError || featuredError || categoriesError;
+  useRestaurantMenus(restaurants);
+  const popularScrollRef = useRef<ScrollView>(null);
+  const popularIndexRef = useRef(0);
+  const popularDraggingRef = useRef(false);
+  const refreshProgress = useRef(new Animated.Value(0)).current;
+  const lastPullRef = useRef(0);
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    if (refreshing) return;
+    const progress = Math.max(0, Math.min(-y, 60));
+    lastPullRef.current = progress;
+    refreshProgress.setValue(progress);
   };
 
-  const [greetingText, setGreetingText] = useState(getGreeting);
+  const handleScrollEndDrag = () => {
+    if (refreshing) return;
+    if (lastPullRef.current >= 48) {
+      setRefreshing(true);
+      Animated.timing(refreshProgress, { toValue: 60, duration: 160, useNativeDriver: true }).start();
+      handleRefresh();
+    } else {
+      Animated.spring(refreshProgress, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 30,
+      }).start();
+    }
+  };
+
+  const refreshOverlayTranslate = refreshProgress.interpolate({
+    inputRange: [0, 60],
+    outputRange: [-72, 0],
+  });
+  const refreshOverlayOpacity = refreshProgress.interpolate({
+    inputRange: [0, 40, 60],
+    outputRange: [0, 0.9, 1],
+  });
+
   useEffect(() => {
-    const msToNextMinute = (60 - new Date().getSeconds()) * 1000;
-    const tick = () => setGreetingText(getGreeting());
-    const timer = setTimeout(() => {
-      tick();
-      setInterval(tick, 60000);
-    }, msToNextMinute);
-    return () => clearTimeout(timer);
-  }, []);
+    if (featured.length <= 1) return;
+    const interval = setInterval(() => {
+      if (popularDraggingRef.current) return;
+      popularIndexRef.current = (popularIndexRef.current + 1) % featured.length;
+      popularScrollRef.current?.scrollTo({
+        x: popularIndexRef.current * POPULAR_CARD_STEP,
+        animated: true,
+      });
+    }, POPULAR_AUTOPLAY_MS);
+    return () => clearInterval(interval);
+  }, [featured.length]);
 
   const filteredRestaurants = selectedCategory
     ? restaurants.filter((r) =>
@@ -64,93 +146,84 @@ export default function HomeScreen() {
 
   const showFiltered = selectedCategory !== null;
 
-  useEffect(() => {
-    const init = async () => {
-      await loadRestaurants();
-      await Promise.all([loadCategories(), loadFeatured()]);
-    };
-    init();
-  }, [loadRestaurants, loadCategories, loadFeatured]);
-
-  useEffect(() => {
-    if (restaurants.length > 0) {
-      const timer = setTimeout(() => loadAllMenus(), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [restaurants, loadAllMenus]);
-
   const [recommendedItems, setRecommendedItems] = useState<Array<MenuItem & { restaurantId: string }>>([]);
 
+  const userId = useAuthStore((s) => s.user?.id);
+
   useEffect(() => {
-    const shuffle = () => {
-      const allItems = restaurants.flatMap((r) => (r.menu || []).map((m) => ({ ...m, restaurantId: r.id })));
-      const shuffled = [...allItems].sort(() => 0.5 - Math.random());
-      setRecommendedItems(shuffled.slice(0, 4));
-    };
-    shuffle();
-    const interval = setInterval(shuffle, 15000);
-    return () => clearInterval(interval);
-  }, [restaurants]);
+    const allItems = restaurants.flatMap((r) => (r.menu || []).map((m) => ({ ...m, restaurantId: r.id })));
+    if (allItems.length === 0) {
+      setRecommendedItems([]);
+      return;
+    }
+    const rand = mulberry32(hashString(`${userId ?? 'guest'}:${SESSION_RANDOM}`));
+    const shuffled = [...allItems];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    setRecommendedItems(shuffled.slice(0, RECOMMENDED_COUNT));
+  }, [restaurants, userId]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadRestaurants(), loadCategories(), loadFeatured()]);
+    await queryClient.invalidateQueries({ queryKey: restaurantKeys.all });
+    await queryClient.invalidateQueries({ queryKey: categoryKeys.all });
     setRefreshing(false);
-  }, [loadRestaurants, loadCategories, loadFeatured]);
+    Animated.timing(refreshProgress, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+  }, [queryClient, refreshProgress]);
 
-  useEffect(() => {
-    loadRestaurants();
-    loadCategories();
-    loadFeatured();
-  }, [loadRestaurants, loadCategories, loadFeatured]);
+  const errorMessage = getErrorMessage(error, 'Failed to load restaurants. Please check your connection and try again.');
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors[theme].background }]}>
-      <View style={[styles.header, { backgroundColor: Colors[theme].surface, borderBottomColor: Colors[theme]['surface-container'] }]}>
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingTextCol}>
-            <Text style={[styles.greeting, { color: Colors[theme]['on-surface-variant'] }]}>
-              {greetingText},
-            </Text>
-            <Text style={[styles.greetingName, { color: Colors[theme]['on-surface'] }]} numberOfLines={1}>
-              {user?.name || 'Guest'}
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={[styles.cartButton, { backgroundColor: Colors[theme]['surface-container-low'] }]}
-          onPress={() => router.push('/your-cart')}
+    <BrandedHeader
+      flat
+      onSearchPress={() => router.push('/search')}
+      overlay={
+        <Animated.View
+          style={[
+            styles.refreshOverlay,
+            {
+              opacity: refreshOverlayOpacity,
+              transform: [{ translateY: refreshOverlayTranslate }],
+            },
+          ]}
         >
-          <MaterialCommunityIcons name="cart-outline" size={22} color={Colors[theme]['on-surface']} />
-          {itemCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{itemCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
+          <ActivityIndicator size="large" color="#ffffff" />
+        </Animated.View>
+      }
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors[theme].primary} />
-        }
+        scrollEventThrottle={16}
+        overScrollMode="always"
+        onScroll={handleScroll}
+        onScrollEndDrag={handleScrollEndDrag}
       >
-        {error && (
+        {errorMessage && (
           <View style={[styles.errorBanner, { backgroundColor: Colors[theme]['error-container'] }]}>
             <MaterialCommunityIcons name="alert-circle" size={20} color={Colors[theme]['on-error-container']} />
-            <Text style={[styles.errorText, { color: Colors[theme]['on-error-container'] }]}>{error}</Text>
+            <Text style={[styles.errorText, { color: Colors[theme]['on-error-container'] }]}>{errorMessage}</Text>
           </View>
         )}
+
         <TouchableOpacity
-          style={[styles.searchBar, { backgroundColor: Colors[theme]['surface-container-lowest'], borderColor: Colors[theme]['surface-container'] }]}
+          style={[styles.homeSearchBar, { backgroundColor: Colors[theme]['surface-container-low'] }]}
           onPress={() => router.push('/search')}
+          activeOpacity={0.7}
         >
-          <MaterialCommunityIcons name="magnify" size={20} color={Colors[theme]['on-surface-variant']} />
-          <Text style={[styles.searchPlaceholder, { color: Colors[theme]['on-surface-variant'] }]}>
-            Search for food, restaurants...
+          <MaterialCommunityIcons name="magnify" size={22} color={Colors[theme]['on-surface-variant']} />
+          <Text
+            style={[styles.homeSearchPlaceholder, { color: Colors[theme]['on-surface-variant'] }]}
+            numberOfLines={1}
+          >
+            Search restaurants, dishes & deals...
           </Text>
+          <View style={[styles.homeSearchDivider, { backgroundColor: Colors[theme]['outline-variant'] }]} />
+          <View style={styles.homeSearchFilter}>
+            <MaterialCommunityIcons name="tune-variant" size={20} color={Colors[theme]['on-surface-variant']} />
+          </View>
         </TouchableOpacity>
 
         <View style={styles.sectionHeader}>
@@ -304,6 +377,84 @@ export default function HomeScreen() {
 
         {!showFiltered && (
           <>
+        <DealCard onOrderPress={() => router.push('/search')} />
+
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: Colors[theme]['on-surface'] }]}>
+            Recommended for You
+          </Text>
+          <TouchableOpacity onPress={() => router.push('/search')} hitSlop={8}>
+            <Text style={[styles.seeAll, { color: Colors[theme].primary }]}>See all</Text>
+          </TouchableOpacity>
+        </View>
+
+        {recommendedItems.length > 0 ? (
+          <FlatList
+            horizontal
+            data={recommendedItems}
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.recommendedList}
+            snapToInterval={REC_CARD_WIDTH + REC_CARD_GAP}
+            decelerationRate="fast"
+            renderItem={({ item }) => {
+              const restaurant = restaurants.find((r) => r.id === item.restaurantId);
+              const rating = restaurant?.rating ?? 0;
+              return (
+                <TouchableOpacity
+                  style={[styles.recommendedCard, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}
+                  activeOpacity={0.85}
+                  onPress={() => router.push(`/food/${item.id}?restaurantId=${item.restaurantId}`)}
+                >
+                  <View style={styles.recommendedImageWrap}>
+                    <OptimizedImage uri={item.image || ''} style={styles.recommendedImage} />
+                    <View style={[styles.recRatingBadge, { backgroundColor: 'rgba(255,255,255,0.92)' }]}>
+                      <MaterialCommunityIcons name="star" size={12} color="#F5A623" />
+                      <Text style={[styles.recRatingText, { color: Colors[theme]['on-surface'] }]}>
+                        {rating.toFixed(1)}
+                      </Text>
+                    </View>
+                    {restaurant?.deliveryTime ? (
+                      <View style={styles.timeBadge}>
+                        <MaterialCommunityIcons name="clock-outline" size={11} color="#ffffff" />
+                        <Text style={styles.timeText}>{restaurant.deliveryTime} min</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.recommendedInfo}>
+                    <Text style={[styles.recommendedName, { color: Colors[theme]['on-surface'] }]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.recommendedMeta, { color: Colors[theme]['on-surface-variant'] }]} numberOfLines={1}>
+                      {restaurant?.cuisine || item.category}
+                    </Text>
+                    <View style={styles.recommendedFooter}>
+                      <Text style={[styles.recommendedPrice, { color: Colors[theme]['on-surface'] }]}>
+                        {formatPrice(item.price)}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.addButton}
+                        activeOpacity={0.85}
+                        hitSlop={6}
+                        onPress={() => addItem({ ...item })}
+                      >
+                        <MaterialCommunityIcons name="plus" size={20} color="#ffffff" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        ) : (
+          <View style={styles.emptyRecommendation}>
+            <MaterialCommunityIcons name="food" size={40} color={Colors[theme]['surface-variant']} />
+            <Text style={[styles.emptyRecText, { color: Colors[theme]['on-surface-variant'] }]}>
+              No recommendations yet
+            </Text>
+          </View>
+        )}
+
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: Colors[theme]['on-surface'] }]}>
             Popular Restaurants
@@ -320,9 +471,22 @@ export default function HomeScreen() {
           </ScrollView>
         ) : (
         <ScrollView
+          ref={popularScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.restaurantsRow}
+          scrollEventThrottle={16}
+          onScrollBeginDrag={() => {
+            popularDraggingRef.current = true;
+          }}
+          onScrollEndDrag={() => {
+            popularDraggingRef.current = false;
+          }}
+          onScroll={(e) => {
+            popularIndexRef.current = Math.round(
+              e.nativeEvent.contentOffset.x / POPULAR_CARD_STEP
+            );
+          }}
         >
           {featured.map((restaurant) => (
             <TouchableOpacity
@@ -353,70 +517,14 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
         )}
-        {/*This is were we will be updating deals for the customers  */}
-        <View style={styles.dealSection}>
-          <View style={[styles.dealBanner, { backgroundColor: Colors[theme].primary }]}>
-            <View style={styles.dealContent}>
-              <View style={[styles.dealTagWrapper, { backgroundColor: Colors[theme]['secondary-container'] }]}>
-                <Text style={[styles.dealTagText, { color: Colors[theme]['on-secondary-container'] }]}>
-                  Flash Deal
-                </Text>
-              </View>
-              <Text style={styles.dealTitle}>50% OFF on{'\n'}Your First Order</Text>
-              <Text style={styles.dealSubtitle}>Valid for the next 2 hours!</Text>
-              <TouchableOpacity style={[styles.dealButton, { backgroundColor: Colors[theme].surface }]}>
-                <Text style={[styles.dealButtonText, { color: Colors[theme].primary }]}>Claim Now</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-
-
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: Colors[theme]['on-surface'] }]}>
-            Recommended for You
-          </Text>
-        </View>
-
-        <View style={styles.recommendedGrid}>
-          {recommendedItems.length > 0 ? (
-            recommendedItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.recommendedCard, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}
-                activeOpacity={0.8}
-                onPress={() => router.push(`/restaurant-details?id=${item.restaurantId}`)}
-              >
-                <OptimizedImage uri={item.image || ''} style={styles.recommendedImage} />
-                <View style={styles.recommendedInfo}>
-                  <Text style={[styles.recommendedName, { color: Colors[theme]['on-surface'] }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.recommendedPrice, { color: Colors[theme].primary }]}>
-                    {formatPrice(item.price)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.emptyRecommendation}>
-              <MaterialCommunityIcons name="food" size={40} color={Colors[theme]['surface-variant']} />
-              <Text style={[styles.emptyRecText, { color: Colors[theme]['on-surface-variant'] }]}>
-                No recommendations yet
-              </Text>
-            </View>
-          )}
-        </View>
           </>
         )}
       </ScrollView>
-    </View>
+    </BrandedHeader>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -428,63 +536,43 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   errorText: { flex: 1, ...Typography['body-sm'] },
-  header: {
+  homeSearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing['container-padding'],
-    paddingTop: 56,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-  },
-  greetingRow: { flexDirection: 'row', alignItems: 'center' },
-  greetingTextCol: { flex: 1 },
-  greeting: { ...Typography['label-md'] },
-  greetingName: { ...Typography.h2 },
-  cartButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: Colors.light.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  cartBadgeText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  scrollContent: { paddingBottom: 100 },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: Spacing.sm,
+    height: 52,
     marginHorizontal: Spacing['container-padding'],
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    gap: Spacing.sm,
-    borderWidth: 1,
-    ...Shadows.sm,
+    borderRadius: BorderRadius.full,
   },
-  searchPlaceholder: { ...Typography['body-md'] },
+  homeSearchPlaceholder: {
+    flex: 1,
+    ...Typography['body-md'],
+  },
+  homeSearchDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 20,
+    marginLeft: Spacing.xs,
+  },
+  homeSearchFilter: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshOverlay: {
+    backgroundColor: 'transparent',
+    padding: 12,
+    borderRadius: BorderRadius.full,
+  },
+  scrollContent: { paddingBottom: 100 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing['container-padding'],
-    marginTop: Spacing.lg,
+    marginTop: Spacing.sm,
     marginBottom: Spacing.md,
   },
   sectionTitle: { ...Typography.h2 },
@@ -530,65 +618,73 @@ const styles = StyleSheet.create({
   restaurantInfo: { padding: Spacing.md },
   restaurantName: { ...Typography['label-md'] },
   restaurantMeta: { ...Typography['body-sm'], marginTop: 4 },
-  dealSection: {
+
+  recommendedList: {
     paddingHorizontal: Spacing['container-padding'],
-    marginTop: Spacing.xl,
   },
-  dealBanner: {
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
+  recommendedCard: {
+    width: REC_CARD_WIDTH,
+    marginRight: REC_CARD_GAP,
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  dealContent: { gap: Spacing.sm },
-  dealTagWrapper: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
+  recommendedImageWrap: { position: 'relative' },
+  recommendedImage: {
+    width: '100%',
+    height: 130,
+    backgroundColor: Colors.light['surface-container'],
+  },
+  recRatingBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
-  dealTagText: { ...Typography['label-sm'] },
-  dealTitle: {
-    ...Typography.display,
-    color: '#ffffff',
-    fontSize: 28,
-    lineHeight: 34,
-  },
-  dealSubtitle: {
-    ...Typography['body-sm'],
-    color: 'rgba(255,255,255,0.8)',
-  },
-  dealButton: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    alignSelf: 'flex-start',
-    marginTop: Spacing.sm,
-  },
-  dealButtonText: {
-    ...Typography['label-md'],
-  },
-
-  recommendedGrid: {
+  recRatingText: { ...Typography['label-sm'], fontWeight: '700' },
+  timeBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Spacing['container-padding'],
-    gap: Spacing.md,
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  recommendedCard: {
-    width: (width - Spacing['container-padding'] * 2 - Spacing.md) / 2,
-    borderRadius: BorderRadius.xl,
-    overflow: 'hidden',
-    ...Shadows.sm,
-  },
-  recommendedImage: {
-    width: '100%',
-    height: (width - Spacing['container-padding'] * 2 - Spacing.md) / 2,
-  },
+  timeText: { color: '#ffffff', fontSize: 11, fontWeight: '600' },
   recommendedInfo: {
     padding: Spacing.sm,
   },
-  recommendedName: { ...Typography['label-md'] },
-  recommendedPrice: { ...Typography['label-sm'] },
+  recommendedName: { ...Typography['label-md'], fontWeight: '700' },
+  recommendedMeta: { ...Typography['body-sm'], marginTop: 2 },
+  recommendedFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+  },
+  recommendedPrice: { ...Typography['label-md'], fontWeight: '700' },
+  addButton: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.light.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
   emptyRecommendation: { alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.lg, width: '100%' },
   emptyRecText: { ...Typography['body-md'] },
   filteredSection: {
