@@ -2,6 +2,7 @@ import { useEffect, useState, Component, ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -15,6 +16,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useLocationStore } from '@/store/locationStore';
 import { useCartStore } from '@/store/cartStore';
 import { setImageCDN } from '@/services/imageOptimizer';
+import { queryClient } from '@/lib/queryClient';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -97,10 +99,12 @@ export default function RootLayout() {
   if (!ready || !showApp) return null;
 
   return (
-    <ErrorBoundary>
-      <StatusBar style="dark" />
-      <Slot />
-    </ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <StatusBar style="dark" />
+        <Slot />
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 }
 
