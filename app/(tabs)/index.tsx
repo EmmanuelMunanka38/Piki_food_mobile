@@ -33,6 +33,7 @@ import BrandedHeader from '@/components/BrandedHeader';
 import DealCard from '@/components/DealCard';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
+import { getRecommendationSeed } from '@/utils/recommendations';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.7;
@@ -44,16 +45,7 @@ const NO_RESTAURANTS: Restaurant[] = [];
 const NO_FEATURED: Restaurant[] = [];
 const NO_CATEGORIES: Category[] = [];
 
-const SESSION_RANDOM = Math.random();
 const RECOMMENDED_COUNT = 4;
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash * 31 + str.charCodeAt(i)) | 0;
-  }
-  return hash;
-}
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -147,6 +139,7 @@ export default function HomeScreen() {
   const showFiltered = selectedCategory !== null;
 
   const [recommendedItems, setRecommendedItems] = useState<Array<MenuItem & { restaurantId: string }>>([]);
+  const [recsReady, setRecsReady] = useState(false);
 
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -154,15 +147,25 @@ export default function HomeScreen() {
     const allItems = restaurants.flatMap((r) => (r.menu || []).map((m) => ({ ...m, restaurantId: r.id })));
     if (allItems.length === 0) {
       setRecommendedItems([]);
+      setRecsReady(true);
       return;
     }
-    const rand = mulberry32(hashString(`${userId ?? 'guest'}:${SESSION_RANDOM}`));
-    const shuffled = [...allItems];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    setRecommendedItems(shuffled.slice(0, RECOMMENDED_COUNT));
+    let cancelled = false;
+    setRecsReady(false);
+    getRecommendationSeed(userId).then((seed) => {
+      if (cancelled) return;
+      const rand = mulberry32(seed);
+      const shuffled = [...allItems];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      setRecommendedItems(shuffled.slice(0, RECOMMENDED_COUNT));
+      setRecsReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [restaurants, userId]);
 
   const handleRefresh = useCallback(async () => {
@@ -446,14 +449,14 @@ export default function HomeScreen() {
               );
             }}
           />
-        ) : (
+        ) : recsReady ? (
           <View style={styles.emptyRecommendation}>
             <MaterialCommunityIcons name="food" size={40} color={Colors[theme]['surface-variant']} />
             <Text style={[styles.emptyRecText, { color: Colors[theme]['on-surface-variant'] }]}>
               No recommendations yet
             </Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: Colors[theme]['on-surface'] }]}>
@@ -566,7 +569,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: BorderRadius.full,
   },
-  scrollContent: { paddingBottom: 100 },
+  scrollContent: { paddingBottom: Spacing.sm },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

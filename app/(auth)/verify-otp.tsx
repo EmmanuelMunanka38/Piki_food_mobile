@@ -1,14 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { PikiButton } from '@/components/ui/PikiButton';
 import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
-import { Images } from '@/constants/images';
 import { useAuthStore } from '@/store/authStore';
 
-const logo = require('@/assets/images/logo.png');
+const OTP_LENGTH = 4;
+const RESEND_TIMER_SECONDS = 60;
 
 function routeByRole(role: string) {
   switch (role) {
@@ -32,26 +41,28 @@ export default function VerifyOTPScreen() {
     role?: string;
   }>();
 
+  const insets = useSafeAreaInsets();
   const theme = 'light';
-  const [otp, setOtp] = useState(['', '', '', '']);
-  const [timer, setTimer] = useState(45);
+
+  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [timer, setTimer] = useState(RESEND_TIMER_SECONDS);
   const [error, setError] = useState('');
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const { verifyOTP, isLoading, sendOtp } = useAuthStore();
   const verifyingRef = useRef(false);
 
   useEffect(() => {
-    if (timer > 0) {
-      const interval = setInterval(() => setTimer((t) => t - 1), 1000);
-      return () => clearInterval(interval);
-    }
+    if (timer <= 0) return;
+    const interval = setInterval(() => setTimer((t) => t - 1), 1000);
+    return () => clearInterval(interval);
   }, [timer]);
 
   const handleOtpChange = (text: string, index: number) => {
     const newOtp = [...otp];
     newOtp[index] = text;
     setOtp(newOtp);
-    if (text && index < 3) {
+    if (text && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -87,8 +98,8 @@ export default function VerifyOTPScreen() {
   const handleResend = async () => {
     if (timer > 0) return;
     setError('');
-    setTimer(45);
-    setOtp(['', '', '', '']);
+    setTimer(RESEND_TIMER_SECONDS);
+    setOtp(Array(OTP_LENGTH).fill(''));
     inputRefs.current[0]?.focus();
     if (email && phone) {
       try {
@@ -99,148 +110,277 @@ export default function VerifyOTPScreen() {
     }
   };
 
+  const handleEditEmail = () => {
+    router.back();
+  };
+
   const isEmailContact = email ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) : false;
   const maskedContact = isEmailContact
     ? email.replace(/(.{2})(.*)(@.*)/, '$1****$3')
     : email;
 
+  const minutes = Math.floor(timer / 60);
+  const seconds = timer % 60;
+  const countdown = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: Colors[theme].background }]}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.heroSection}>
-        <Image source={{ uri: Images.verifyOtp.hero }} style={styles.heroImage} />
-        <View style={styles.heroOverlay} />
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <View style={[styles.backButtonInner, { backgroundColor: 'rgba(252,249,248,0.8)' }]}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: Colors[theme].background }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + Spacing.sm, paddingBottom: insets.bottom + Spacing.xl },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
             <MaterialCommunityIcons name="arrow-left" size={24} color={Colors[theme]['on-surface']} />
-          </View>
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: Colors[theme].surface }]}>
-          <View style={styles.brandSection}>
-            <View style={[styles.brandIcon, { backgroundColor: Colors[theme]['primary-container'] }]}>
-              <Image source={logo} style={styles.brandLogoImage} contentFit="contain" />
-            </View>
-            <Text style={[styles.brandName, { color: Colors[theme]['on-surface'] }]}>Piki Food</Text>
-          </View>
-
+        <View style={styles.titleArea}>
           <Text style={[styles.title, { color: Colors[theme]['on-surface'] }]}>
-            OTP Verification
+            We just sent an email
           </Text>
           <Text style={[styles.subtitle, { color: Colors[theme]['on-surface-variant'] }]}>
-            Enter the code sent to{' '}
-            <Text style={[styles.contactHighlight, { color: Colors[theme]['on-surface'] }]}>
+            Enter the security code we sent to
+          </Text>
+          <TouchableOpacity
+            onPress={handleEditEmail}
+            style={[
+              styles.emailRow,
+              { backgroundColor: Colors[theme]['surface-container-low'] },
+            ]}
+            activeOpacity={0.7}
+            hitSlop={4}
+          >
+            <Text style={[styles.email, { color: Colors[theme]['on-surface'] }]}>
               {maskedContact}
             </Text>
-          </Text>
+            <MaterialCommunityIcons
+              name="pencil"
+              size={14}
+              color={Colors[theme]['on-surface-variant']}
+            />
+          </TouchableOpacity>
+        </View>
 
-          <View style={styles.otpRow}>
-            {otp.map((digit, index) => (
+        <View style={styles.otpRow}>
+          {otp.map((digit, index) => {
+            const isFocused = focusedIndex === index;
+            const isFilled = digit !== '';
+            return (
               <TextInput
                 key={index}
-                ref={(ref) => { inputRefs.current[index] = ref; }}
+                ref={(ref) => {
+                  inputRefs.current[index] = ref;
+                }}
                 style={[
                   styles.otpInput,
                   {
-                    backgroundColor: Colors[theme]['surface-container-low'],
-                    borderColor: digit ? Colors[theme].primary : Colors[theme]['outline-variant'],
+                    backgroundColor: isFilled
+                      ? Colors[theme]['surface-container-low']
+                      : Colors[theme].surface,
+                    borderColor: isFocused || isFilled
+                      ? Colors[theme].primary
+                      : Colors[theme]['outline-variant'],
                     color: Colors[theme]['on-surface'],
                   },
+                  isFocused && styles.otpInputFocused,
                 ]}
                 value={digit}
                 onChangeText={(text) => handleOtpChange(text.replace(/[^0-9]/g, ''), index)}
                 onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
+                onFocus={() => setFocusedIndex(index)}
+                onBlur={() => setFocusedIndex(null)}
                 keyboardType="number-pad"
                 maxLength={1}
                 autoFocus={index === 0}
+                selectTextOnFocus
               />
-            ))}
+            );
+          })}
+        </View>
+
+        {error ? (
+          <View style={[styles.errorBox, { backgroundColor: Colors[theme]['error-container'] + '60' }]}>
+            <MaterialCommunityIcons name="alert-circle" size={18} color={Colors[theme].error} />
+            <Text style={[styles.errorText, { color: Colors[theme].error }]}>{error}</Text>
           </View>
+        ) : null}
 
-          {error ? (
-            <View style={[styles.errorBox, { backgroundColor: Colors[theme]['error-container'] + '60' }]}>
-              <MaterialCommunityIcons name="alert-circle" size={18} color={Colors[theme].error} />
-              <Text style={[styles.errorText, { color: Colors[theme].error }]}>{error}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.timerSection}>
-            <View style={styles.timerRow}>
-              <MaterialCommunityIcons name="clock-outline" size={16} color={Colors[theme]['on-surface-variant']} />
-              <Text style={[styles.timerText, { color: Colors[theme]['on-surface-variant'] }]}>
-                Resend code in{' '}
-                <Text style={[styles.timerHighlight, { color: Colors[theme]['secondary-container'] }]}>
-                  00:{timer.toString().padStart(2, '0')}
-                </Text>
-              </Text>
-            </View>
-            <TouchableOpacity onPress={handleResend} disabled={timer > 0}>
-              <Text style={[styles.resend, { color: timer > 0 ? Colors[theme]['on-surface-variant'] : Colors[theme].primary, opacity: timer > 0 ? 0.5 : 1 }]}>
-                Resend Now
-              </Text>
-            </TouchableOpacity>
-          </View>
-
+        <View style={styles.footer}>
           <PikiButton
             title="Verify"
             onPress={handleVerify}
             disabled={!isComplete}
             loading={isLoading}
             fullWidth
+            style={styles.verifyButton}
           />
 
-          <PikiButton
-            title="Change email"
-            variant="outline"
-            onPress={() => router.back()}
-            fullWidth
-            style={styles.changeButton}
-          />
+          <View style={styles.resendSection}>
+            <Text style={[styles.resendLabel, { color: Colors[theme]['on-surface-variant'] }]}>
+              Didn{"'"}t receive code?
+            </Text>
+            <TouchableOpacity
+              onPress={handleResend}
+              disabled={timer > 0}
+              activeOpacity={0.7}
+              hitSlop={8}
+            >
+              <View style={styles.resendRow}>
+                <Text
+                  style={[
+                    styles.resendText,
+                    {
+                      color: timer > 0
+                        ? Colors[theme]['on-surface-variant']
+                        : Colors[theme].primary,
+                    },
+                  ]}
+                >
+                  Resend
+                </Text>
+                {timer > 0 && (
+                  <Text style={[styles.countdown, { color: Colors[theme]['on-surface-variant'] }]}>
+                    {'\u00A0'}-{' '}
+                    {countdown}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-
-      <View style={styles.securityBadge}>
-        <MaterialCommunityIcons name="shield-check" size={18} color={Colors[theme].primary} />
-        <Text style={[styles.securityText, { color: Colors[theme]['on-surface-variant'] }]}>
-          Secure verification powered by Piki
-        </Text>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   container: { flex: 1 },
-  content: { flexGrow: 1, paddingBottom: Spacing.xl },
-  heroSection: { height: 200, width: '100%', position: 'relative' },
-  heroImage: { width: '100%', height: '100%' },
-  heroOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, backgroundColor: '#fcf9f8', borderTopLeftRadius: 32, borderTopRightRadius: 32 },
-  backButton: { position: 'absolute', top: 60, left: Spacing['container-padding'], zIndex: 10 },
-  backButtonInner: { width: 40, height: 40, borderRadius: BorderRadius.sm, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
-  cardWrapper: { paddingHorizontal: Spacing['container-padding'], marginTop: -40, zIndex: 10 },
-  card: { borderRadius: 24, padding: Spacing.xl, borderWidth: 1, borderColor: '#e5e2e1', alignItems: 'center', gap: Spacing.lg, shadowColor: '#0fa958', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 24, elevation: 4 },
-  brandSection: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, alignSelf: 'flex-start' },
-  brandIcon: { width: 48, height: 48, borderRadius: BorderRadius.xl, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.light['primary-container'], shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
-  brandLogoImage: { width: 32, height: 32 },
-  brandName: { ...Typography.h2 },
-  title: { ...Typography.h1, marginBottom: -Spacing.sm, textAlign: 'center' },
-  subtitle: { ...Typography['body-md'], textAlign: 'center', lineHeight: 24, paddingHorizontal: Spacing.md },
-  contactHighlight: { fontWeight: '700' },
-  otpRow: { flexDirection: 'row', gap: Spacing.md },
-  otpInput: { width: 64, height: 72, borderRadius: BorderRadius.xl, borderWidth: 2, textAlign: 'center', ...Typography.h1, fontSize: 28 },
-  timerSection: { alignItems: 'center', gap: Spacing.sm },
-  timerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  timerText: { ...Typography['label-md'] },
-  timerHighlight: { fontWeight: '700' },
-  resend: { ...Typography['label-md'] },
-  changeButton: { marginTop: -Spacing.sm },
-  errorBox: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md, width: '100%' },
-  errorText: { ...Typography['body-sm'], flex: 1 },
-  securityBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: Spacing.xs, backgroundColor: 'rgba(15, 169, 88, 0.08)', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, marginTop: Spacing.xl },
-  securityText: { ...Typography['label-sm'] },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing['container-padding'],
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light['surface-container-low'],
+    borderWidth: 1,
+    borderColor: Colors.light['outline-variant'],
+  },
+  titleArea: {
+    alignItems: 'center',
+    marginTop: Spacing.xl + Spacing.lg,
+    paddingHorizontal: Spacing.md,
+  },
+  title: {
+    ...Typography.h1,
+    fontSize: 28,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  subtitle: {
+    ...Typography['body-md'],
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  emailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+  },
+  email: {
+    ...Typography['label-md'],
+    fontWeight: '600',
+  },
+  otpRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: Spacing.xl + Spacing.sm,
+  },
+  otpInput: {
+    flex: 1,
+    aspectRatio: 1,
+    maxWidth: 72,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    textAlign: 'center',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  otpInputFocused: {
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.lg,
+  },
+  errorText: {
+    ...Typography['body-sm'],
+    flex: 1,
+  },
+  footer: {
+    marginTop: 'auto',
+    paddingTop: Spacing.xl,
+    gap: Spacing.lg,
+  },
+  verifyButton: {
+    borderRadius: BorderRadius.full,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  resendSection: {
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  resendLabel: {
+    ...Typography['body-md'],
+  },
+  resendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  resendText: {
+    ...Typography['label-md'],
+    fontWeight: '700',
+  },
+  countdown: {
+    ...Typography['label-md'],
+    fontWeight: '600',
+  },
 });

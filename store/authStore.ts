@@ -63,6 +63,8 @@ export const useAuthStore = create<AuthState>()(
           set({ user, token: accessToken, refreshToken, isLoading: false });
           const { useCartStore } = await import('@/store/cartStore');
           useCartStore.getState().loadCart();
+          const { newRecommendationSession } = await import('@/utils/recommendations');
+          await newRecommendationSession(user.id);
         } catch (err: any) {
           set({ isLoading: false });
           const message =
