@@ -30,6 +30,15 @@ export const ordersService = {
     return res.data.data;
   },
 
+  async deleteAll(): Promise<number> {
+    const res = await api.delete<ApiResponse<{ deleted: number }>>('/orders');
+    return res.data.data.deleted;
+  },
+
+  async deleteOrder(id: string): Promise<void> {
+    await api.delete(`/orders/${id}`);
+  },
+
   async getById(id: string): Promise<Order> {
     const res = await api.get<ApiResponse<Order>>(`/orders/${id}`);
     return res.data.data;

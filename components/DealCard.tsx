@@ -1,13 +1,21 @@
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { Promotion } from '@/types';
 
 const PIZ_IMAGE = require('@/assets/images/piz.png');
 
 interface DealCardProps {
+  promotion?: Promotion;
   onOrderPress?: () => void;
 }
 
-export default function DealCard({ onOrderPress }: DealCardProps) {
+export default function DealCard({ promotion, onOrderPress }: DealCardProps) {
+  const pill = promotion?.title.match(/\d+\s*%/)?.[0] ?? 'SPECIAL OFFER';
+  const heading = promotion?.title ?? 'Grab Our Exclusive Food Discounts Now!';
+  const subtitle = promotion?.description;
+  const ctaText = promotion?.ctaLabel || 'Order Now';
+  const image = promotion?.image ? { uri: promotion.image } : PIZ_IMAGE;
+
   return (
     <View style={styles.card}>
       <View style={styles.patternCircleLarge} />
@@ -17,19 +25,24 @@ export default function DealCard({ onOrderPress }: DealCardProps) {
 
       <View style={styles.content}>
         <View style={styles.discountPill}>
-          <Text style={styles.discountText}>45% OFF</Text>
+          <Text style={styles.discountText}>{pill}</Text>
         </View>
-        <Text style={styles.heading}>Grab Our Exclusive Food Discounts Now!</Text>
+        <Text style={styles.heading}>{heading}</Text>
+        {subtitle ? (
+          <Text style={styles.subtitle} numberOfLines={2}>
+            {subtitle}
+          </Text>
+        ) : null}
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={onOrderPress}
           activeOpacity={0.85}
         >
-          <Text style={styles.ctaText}>Order Now</Text>
+          <Text style={styles.ctaText}>{ctaText}</Text>
         </TouchableOpacity>
       </View>
 
-      <Image source={PIZ_IMAGE} style={styles.image} resizeMode="cover" />
+      <Image source={image as any} style={styles.image} resizeMode="cover" />
     </View>
   );
 }
@@ -104,6 +117,11 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     fontWeight: '800',
     color: '#ffffff',
+  },
+  subtitle: {
+    ...Typography['body-sm'],
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 4,
   },
   ctaButton: {
     alignSelf: 'flex-start',

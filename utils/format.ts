@@ -2,6 +2,20 @@ export function formatPrice(amount: number): string {
   return `TSh ${amount.toLocaleString('en-TZ')}`;
 }
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  mpesa: 'M-Pesa',
+  tigo_pesa: 'Tigo Pesa',
+  airtel_money: 'Airtel Money',
+  mixx_by_yas: 'Mixx by Yas',
+  halopesa: 'HaloPesa',
+  card: 'Credit / Debit Card',
+  cash: 'Cash on Delivery',
+};
+
+export function getPaymentMethodLabel(method: string): string {
+  return PAYMENT_METHOD_LABELS[method] || method.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', {

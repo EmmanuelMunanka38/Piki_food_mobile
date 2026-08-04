@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { restaurantsService } from '@/services/restaurants.service';
-import { Restaurant, MenuItem } from '@/types';
+import { Restaurant, MenuItem, FoodItem } from '@/types';
 
 export const restaurantKeys = {
   all: ['restaurants'] as const,
@@ -13,11 +13,18 @@ export const restaurantKeys = {
   detail: (id: string) => [...restaurantKeys.details(), id] as const,
   menus: () => [...restaurantKeys.all, 'menu'] as const,
   menu: (id: string) => [...restaurantKeys.menus(), id] as const,
+  popularFoods: (limit: number) => [...restaurantKeys.all, 'foods', 'popular', limit] as const,
+  searchFoods: (query: string) => [...restaurantKeys.all, 'foods', 'search', query] as const,
 };
 
 export const categoryKeys = {
   all: ['categories'] as const,
   list: () => [...categoryKeys.all, 'list'] as const,
+};
+
+export const promotionKeys = {
+  all: ['promotions'] as const,
+  list: () => [...promotionKeys.all, 'list'] as const,
 };
 
 export function useRestaurants() {
@@ -54,6 +61,29 @@ export function useCategories() {
   return useQuery({
     queryKey: categoryKeys.list(),
     queryFn: restaurantsService.getCategories,
+  });
+}
+
+export function usePromotions() {
+  return useQuery({
+    queryKey: promotionKeys.list(),
+    queryFn: restaurantsService.getPromotions,
+  });
+}
+
+export function usePopularFoods(limit = 8) {
+  return useQuery({
+    queryKey: restaurantKeys.popularFoods(limit),
+    queryFn: () => restaurantsService.getPopularFoods(limit),
+  });
+}
+
+export function useFoodSearch(query: string) {
+  const trimmed = query.trim();
+  return useQuery<FoodItem[]>({
+    queryKey: restaurantKeys.searchFoods(trimmed),
+    queryFn: () => restaurantsService.searchFood(trimmed),
+    enabled: trimmed.length >= 2,
   });
 }
 

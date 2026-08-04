@@ -11,7 +11,7 @@ import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/
 import { useOrderStore } from '@/store/orderStore';
 import { useTrackingStore } from '@/store/trackingStore';
 import { useLocationStore } from '@/store/locationStore';
-import { formatPrice, getStatusLabel } from '@/utils/format';
+import { formatPrice, getStatusLabel, getPaymentMethodLabel } from '@/utils/format';
 import { OrderStatus, Coordinate } from '@/types';
 import { MapboxMap } from '@/components/map/MapboxMap';
 import { MapControls } from '@/components/map/MapControls';
@@ -271,7 +271,7 @@ export default function TrackOrderScreen() {
         <Text style={[styles.errorText, { color: Colors[theme]['on-surface-variant'] }]}>
           {error || 'Order not found'}
         </Text>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: Colors[theme].primary }]}>
+        <TouchableOpacity onPress={() => router.dismissAll()} style={[styles.backBtn, { backgroundColor: Colors[theme].primary }]}>
           <Text style={styles.backBtnText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -338,7 +338,7 @@ export default function TrackOrderScreen() {
 
         {/* Header overlay */}
         <View style={styles.headerOverlay}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+          <TouchableOpacity onPress={() => router.dismissAll()} style={styles.headerBack}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="#ffffff" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
@@ -600,7 +600,7 @@ export default function TrackOrderScreen() {
               <View style={styles.paymentRow}>
                 <MaterialCommunityIcons name="credit-card-outline" size={20} color={Colors[theme].primary} />
                 <Text style={[styles.paymentLabel, { color: Colors[theme]['on-surface'] }]}>
-                  Paid via {order.paymentMethod === 'mpesa' ? 'M-Pesa' : order.paymentMethod}
+                  Paid via {getPaymentMethodLabel(order.paymentMethod)}
                 </Text>
               </View>
             </View>
