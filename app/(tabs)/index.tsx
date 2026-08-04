@@ -27,10 +27,11 @@ import {
   getErrorMessage,
   restaurantKeys,
   categoryKeys,
+  promotionKeys,
 } from '@/hooks/use-restaurants';
 import { CategorySkeleton, RestaurantCardSkeleton } from '@/components/ui/SkeletonLoader';
 import BrandedHeader from '@/components/BrandedHeader';
-import DealCard from '@/components/DealCard';
+import DealsSection from '@/components/DealsSection';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
 import { getRecommendationSeed } from '@/utils/recommendations';
@@ -172,6 +173,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: restaurantKeys.all });
     await queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+    await queryClient.invalidateQueries({ queryKey: promotionKeys.all });
     setRefreshing(false);
     Animated.timing(refreshProgress, { toValue: 0, duration: 200, useNativeDriver: true }).start();
   }, [queryClient, refreshProgress]);
@@ -380,7 +382,7 @@ export default function HomeScreen() {
 
         {!showFiltered && (
           <>
-        <DealCard onOrderPress={() => router.push('/search')} />
+        <DealsSection />
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: Colors[theme]['on-surface'] }]}>
