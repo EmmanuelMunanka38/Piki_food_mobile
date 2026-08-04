@@ -1,338 +1,444 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  FlatList,
   TextInput,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import { formatPrice } from '@/utils/format';
 import OptimizedImage from '@/components/ui/OptimizedImage';
-import { useRestaurants } from '@/hooks/use-restaurants';
+import { usePopularFoods, useFoodSearch } from '@/hooks/use-restaurants';
+import { useCartStore } from '@/store/cartStore';
+import { FoodItem } from '@/types';
 
-const { width } = Dimensions.get('window');
-const GRID_GAP = Spacing.md;
-const GRID_PADDING = Spacing['container-padding'] * 2;
-const GRID_CARD_WIDTH = (width - GRID_PADDING - GRID_GAP) / 2;
+const FILTERS = ['All', 'Fast Delivery', 'Rating 4.5+', 'Free Delivery'] as const;
 
-const popularSearches = ['Pizza', 'Swahili', 'Burgers', 'Juice', 'Pilau', 'Seafood'];
+const SORT_OPTIONS = [
+  { value: 'recommended', label: 'Recommended' },
+  { value: 'rating', label: 'Highest Rating' },
+  { value: 'fastest', label: 'Fastest Delivery' },
+] as const;
+
+type FilterValue = (typeof FILTERS)[number];
+type SortValue = (typeof SORT_OPTIONS)[number]['value'];
+
+const SEARCH_DEBOUNCE_MS = 350;
+const POPULAR_LIMIT = 8;
+
+function parseMinutes(deliveryTime: string): number {
+  const match = /(\d+)/.exec(deliveryTime);
+  return match ? parseInt(match[1], 10) : 60;
+}
 
 export default function SearchScreen() {
   const theme = 'light';
+  const insets = useSafeAreaInsets();
+  const addItem = useCartStore((s) => s.addItem);
+
   const [query, setQuery] = useState('');
-  const { data: restaurants = [] } = useRestaurants();
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterValue>('All');
+  const [sortOrder, setSortOrder] = useState<SortValue>('recommended');
+  const [sortOpen, setSortOpen] = useState(false);
 
-  const allMenuItems = useMemo(
-    () => restaurants.flatMap((r) => r.menu || []),
-    [restaurants]
-  );
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [query]);
 
-  const results = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    if (!q) {
-      return {
-        restaurants,
-        menuItems: allMenuItems.slice(0, 6),
-      };
+  const isSearching = debouncedQuery.trim().length >= 2;
+
+  const { data: popularFoods = [], isPending: popularPending } = usePopularFoods(POPULAR_LIMIT);
+  const { data: searchResults = [], isFetching: searchFetching } = useFoodSearch(debouncedQuery);
+
+  const baseItems: FoodItem[] = isSearching ? searchResults : popularFoods;
+  const isLoading = isSearching ? searchFetching && searchResults.length === 0 : popularPending;
+
+  const filteredItems = useMemo(() => {
+    let list = baseItems;
+    if (activeFilter === 'Fast Delivery') {
+      list = list.filter((m) => parseMinutes(m.restaurant.deliveryTime) <= 30);
+    } else if (activeFilter === 'Rating 4.5+') {
+      list = list.filter((m) => m.restaurant.rating >= 4.5);
+    } else if (activeFilter === 'Free Delivery') {
+      list = list.filter((m) => m.restaurant.deliveryFee === 0);
     }
 
-    const filteredRes = restaurants.filter(
-      (r) =>
-        r.name.toLowerCase().includes(q) ||
-        r.cuisine.toLowerCase().includes(q) ||
-        (r.categories as string[]).some((c) => c.toLowerCase().includes(q))
+    const sorted = [...list];
+    if (sortOrder === 'rating') {
+      sorted.sort((a, b) => b.restaurant.rating - a.restaurant.rating);
+    } else if (sortOrder === 'fastest') {
+      sorted.sort(
+        (a, b) => parseMinutes(a.restaurant.deliveryTime) - parseMinutes(b.restaurant.deliveryTime)
+      );
+    }
+    return sorted;
+  }, [baseItems, activeFilter, sortOrder]);
+
+  const renderFoodCard = ({ item }: { item: FoodItem }) => {
+    const { restaurant } = item;
+    return (
+      <TouchableOpacity
+        style={[styles.card, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}
+        activeOpacity={0.9}
+        onPress={() => router.push(`/food/${item.id}?restaurantId=${item.restaurantId}`)}
+      >
+        <View style={styles.cardImageWrap}>
+          <OptimizedImage uri={item.image} style={styles.cardImage} fallbackIcon="food" fallbackSize={34} />
+        </View>
+
+        <View style={styles.cardInfo}>
+          <Text style={[styles.cardName, { color: Colors[theme]['on-surface'] }]} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={[styles.cardSubtitle, { color: Colors[theme].primary }]} numberOfLines={1}>
+            {restaurant.name}
+          </Text>
+          <View style={styles.cardMetaRow}>
+            <MaterialCommunityIcons name="clock-outline" size={13} color={Colors[theme]['on-surface-variant']} />
+            <Text style={[styles.cardMetaText, { color: Colors[theme]['on-surface-variant'] }]}>
+              {restaurant.deliveryTime}
+            </Text>
+            <View style={[styles.metaDot, { backgroundColor: Colors[theme]['on-surface-variant'] }]} />
+            <MaterialCommunityIcons name="bike" size={13} color={Colors[theme]['on-surface-variant']} />
+            <Text style={[styles.cardMetaText, { color: Colors[theme]['on-surface-variant'] }]}>
+              {formatPrice(restaurant.deliveryFee)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.ratingBadge, { backgroundColor: Colors[theme].primary }]}>
+          <MaterialCommunityIcons name="star" size={12} color="#ffffff" />
+          <Text style={styles.ratingText}>{restaurant.rating}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.addButton, { backgroundColor: Colors[theme].primary }]}
+          onPress={() => addItem(item)}
+          activeOpacity={0.8}
+          hitSlop={6}
+        >
+          <MaterialCommunityIcons name="plus" size={20} color="#ffffff" />
+        </TouchableOpacity>
+      </TouchableOpacity>
     );
-
-    const filteredMenu = allMenuItems.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.description.toLowerCase().includes(q)
-    );
-
-    return { restaurants: filteredRes, menuItems: filteredMenu };
-  }, [query, restaurants, allMenuItems]);
-
-  const hasQuery = query.trim().length > 0;
-  const hasActualResults = results.restaurants.length > 0 || results.menuItems.length > 0;
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: Colors[theme]['surface'] }]}>
-      <View style={[styles.header, { backgroundColor: Colors[theme].surface, borderBottomColor: Colors[theme]['surface-container'] }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={Colors[theme]['on-surface']} />
+      <View style={[styles.header, { backgroundColor: Colors[theme].primary, paddingTop: insets.top + Spacing.sm }]}>
+        <View style={styles.headerDecorLarge} />
+        <View style={styles.headerDecorSmall} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerIcon} activeOpacity={0.7} hitSlop={8}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: Colors[theme]['on-surface'] }]}>Search</Text>
-        <TouchableOpacity style={[styles.cartButton, { backgroundColor: Colors[theme]['surface-container-low'] }]}>
-          <MaterialCommunityIcons name="cart-outline" size={20} color={Colors[theme]['on-surface']} />
+        <Text style={[styles.headerTitle, { color: '#ffffff' }]}>Food</Text>
+        <TouchableOpacity
+          onPress={() => setShowSearch((v) => !v)}
+          style={styles.headerIcon}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <MaterialCommunityIcons name="magnify" size={24} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.searchBar, { backgroundColor: Colors[theme]['surface-container-lowest'], borderColor: Colors[theme]['surface-container'] }]}>
-          <MaterialCommunityIcons name="magnify" size={22} color={Colors[theme]['on-surface-variant']} />
+      {showSearch && (
+        <View style={[styles.searchBar, { backgroundColor: Colors[theme]['surface-container-low'] }]}>
+          <MaterialCommunityIcons name="magnify" size={20} color={Colors[theme].primary} />
           <TextInput
             style={[styles.searchInput, { color: Colors[theme]['on-surface'] }]}
-            placeholder="Search restaurants, dishes..."
+            placeholder="Search food, dishes..."
             placeholderTextColor={Colors[theme]['on-surface-variant']}
             value={query}
             onChangeText={setQuery}
             autoFocus
+            returnKeyType="search"
           />
           {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
-              <MaterialCommunityIcons name="close-circle" size={22} color={Colors[theme]['on-surface-variant']} />
+            <TouchableOpacity onPress={() => setQuery('')} hitSlop={6} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="close-circle" size={20} color={Colors[theme]['on-surface-variant']} />
             </TouchableOpacity>
           )}
         </View>
+      )}
 
-        <View style={styles.browseSection}>
-          <View style={styles.browseHeader}>
-            <MaterialCommunityIcons name="trending-up" size={20} color={Colors[theme].primary} />
-            <Text style={[styles.browseTitle, { color: Colors[theme]['on-surface'] }]}>
-              Popular Searches
-            </Text>
-          </View>
-          <View style={styles.chipsRow}>
-            {popularSearches.map((item) => (
+      <View style={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pillsRow}
+          keyboardShouldPersistTaps="handled"
+        >
+          {FILTERS.map((filter) => {
+            const isActive = activeFilter === filter;
+            return (
               <TouchableOpacity
-                key={item}
-                style={[styles.chip, { backgroundColor: Colors[theme]['surface-container-high'] }]}
-                onPress={() => setQuery(item)}
+                key={filter}
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: isActive
+                      ? Colors[theme].primary
+                      : Colors[theme]['surface-container-low'],
+                  },
+                ]}
+                onPress={() => setActiveFilter(filter)}
+                activeOpacity={0.75}
               >
-                <MaterialCommunityIcons
-                  name={
-                    item === 'Pizza' ? 'pizza' :
-                    item === 'Swahili' ? 'silverware' :
-                    item === 'Burgers' ? 'hamburger' :
-                    item === 'Juice' ? 'cup' :
-                    item === 'Pilau' ? 'rice' :
-                    'food-apple'
-                  }
-                  size={16}
-                  color={Colors[theme].primary}
-                />
-                <Text style={[styles.chipText, { color: Colors[theme]['on-surface'] }]}>{item}</Text>
+                <Text
+                  style={[
+                    styles.pillText,
+                    { color: isActive ? '#ffffff' : Colors[theme]['on-surface'] },
+                  ]}
+                >
+                  {filter}
+                </Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+            );
+          })}
+        </ScrollView>
+        <TouchableOpacity
+          onPress={() => setSortOpen(true)}
+          style={[styles.filterButton, { backgroundColor: Colors[theme]['surface-container-low'] }]}
+          activeOpacity={0.75}
+          hitSlop={6}
+        >
+          <MaterialCommunityIcons name="tune-variant" size={22} color={Colors[theme].primary} />
+        </TouchableOpacity>
+      </View>
 
-        {hasQuery && !hasActualResults && (
+      <FlatList
+        data={filteredItems}
+        keyExtractor={(item) => item.id}
+        renderItem={renderFoodCard}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color={Colors[theme].primary} />
+              <Text style={[styles.loadingText, { color: Colors[theme]['on-surface-variant'] }]}>
+                Searching food...
+              </Text>
+            </View>
+          ) : (
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="food-off" size={64} color={Colors[theme]['surface-container']} />
+            <View style={[styles.emptyIcon, { backgroundColor: Colors[theme]['surface-container-low'] }]}>
+              <MaterialCommunityIcons name="food-off" size={40} color={Colors[theme]['on-surface-variant']} />
+            </View>
             <Text style={[styles.emptyTitle, { color: Colors[theme]['on-surface'] }]}>
-              {`No results for "${query}"`}
+              {isSearching ? 'No food found' : 'No food yet'}
             </Text>
             <Text style={[styles.emptySubtitle, { color: Colors[theme]['on-surface-variant'] }]}>
-              Try a different search term or browse categories
+              {isSearching
+                ? 'Try changing your search or filters'
+                : 'Check back later for available food'}
             </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setQuery('');
+                setDebouncedQuery('');
+                setActiveFilter('All');
+                setShowSearch(false);
+              }}
+              style={[styles.emptyReset, { backgroundColor: Colors[theme].primary }]}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.emptyResetText}>Reset filters</Text>
+            </TouchableOpacity>
           </View>
-        )}
+          )
+        }
+      />
 
-        {hasActualResults && (
-          <View style={styles.resultsSection}>
-            {results.restaurants.length > 0 && (
-              <View style={styles.group}>
-                <View style={styles.groupHeader}>
-                  <View style={styles.groupHeaderLeft}>
-                    <MaterialCommunityIcons name="store-outline" size={20} color={Colors[theme].primary} />
-                    <Text style={[styles.groupTitle, { color: Colors[theme]['on-surface'] }]}>
-                      Restaurants
-                    </Text>
-                  </View>
-                  <View style={[styles.countBadge, { backgroundColor: Colors[theme]['surface-container'] }]}>
-                    <Text style={[styles.countText, { color: Colors[theme]['on-surface-variant'] }]}>
-                      {results.restaurants.length}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.restaurantsGrid}>
-                  {results.restaurants.map((r) => (
-                    <TouchableOpacity
-                      key={r.id}
-                      activeOpacity={0.9}
-                      onPress={() => router.push(`/restaurant-details?id=${r.id}`)}
-                      style={[styles.restaurantCard, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}
-                    >
-                      <View style={styles.restaurantImageContainer}>
-                        <OptimizedImage uri={r.image} style={styles.restaurantImage} />
-                        <View style={[styles.statusBadge, { backgroundColor: r.isOpen ? Colors[theme].primary : Colors[theme].error }]}>
-                          <Text style={styles.statusText}>{r.isOpen ? 'Open' : 'Closed'}</Text>
-                        </View>
-                        <View style={[styles.ratingBadge, { backgroundColor: 'rgba(255,255,255,0.92)' }]}>
-                          <MaterialCommunityIcons name="star" size={14} color={Colors[theme]['secondary-container']} />
-                          <Text style={[styles.ratingText, { color: Colors[theme]['on-surface'] }]}>{r.rating}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.restaurantInfo}>
-                        <Text style={[styles.restaurantName, { color: Colors[theme]['on-surface'] }]} numberOfLines={1}>
-                          {r.name}
-                        </Text>
-                        <Text style={[styles.restaurantCuisine, { color: Colors[theme]['on-surface-variant'] }]}>
-                          {r.cuisine}
-                        </Text>
-                        <View style={styles.restaurantMeta}>
-                          <MaterialCommunityIcons name="clock-outline" size={14} color={Colors[theme]['on-surface-variant']} />
-                          <Text style={[styles.restaurantMetaText, { color: Colors[theme]['on-surface-variant'] }]}>
-                            {r.deliveryTime}
-                          </Text>
-                          <View style={[styles.metaDot, { backgroundColor: Colors[theme]['on-surface-variant'] }]} />
-                          <MaterialCommunityIcons name="bike" size={14} color={Colors[theme]['on-surface-variant']} />
-                          <Text style={[styles.restaurantMetaText, { color: Colors[theme]['on-surface-variant'] }]}>
-                            {formatPrice(r.deliveryFee)}
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {results.menuItems.length > 0 && (
-              <View style={styles.group}>
-                <View style={styles.groupHeader}>
-                  <View style={styles.groupHeaderLeft}>
-                    <MaterialCommunityIcons name="food-outline" size={20} color={Colors[theme].primary} />
-                    <Text style={[styles.groupTitle, { color: Colors[theme]['on-surface'] }]}>
-                      Menu Items
-                    </Text>
-                  </View>
-                  <View style={[styles.countBadge, { backgroundColor: Colors[theme]['surface-container'] }]}>
-                    <Text style={[styles.countText, { color: Colors[theme]['on-surface-variant'] }]}>
-                      {results.menuItems.length}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.menuGrid}>
-                  {results.menuItems.map((m) => {
-                    const restaurant = restaurants.find((r) => r.id === m.restaurantId);
-                    return (
-                      <TouchableOpacity
-                        key={m.id}
-                        style={[styles.menuCard, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}
-                        onPress={() => router.push(`/restaurant-details?id=${m.restaurantId}`)}
-                        activeOpacity={0.7}
-                      >
-                        <OptimizedImage uri={m.image} style={styles.menuImage} />
-                        <View style={styles.menuInfo}>
-                          <Text style={[styles.menuName, { color: Colors[theme]['on-surface'] }]} numberOfLines={1}>
-                            {m.name}
-                          </Text>
-                          <Text style={[styles.menuDesc, { color: Colors[theme]['on-surface-variant'] }]} numberOfLines={2}>
-                            {m.description}
-                          </Text>
-                          {restaurant && (
-                            <Text style={[styles.menuRestaurant, { color: Colors[theme]['primary'] }]} numberOfLines={1}>
-                              {restaurant.name}
-                            </Text>
-                          )}
-                          <Text style={[styles.menuPrice, { color: Colors[theme]['on-surface'] }]}>
-                            {formatPrice(m.price)}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
+      <Modal
+        visible={sortOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSortOpen(false)}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSortOpen(false)}>
+          <View style={[styles.modalCard, { backgroundColor: Colors[theme].surface, paddingBottom: insets.bottom + Spacing.lg }]}>
+            <View style={styles.modalHandle} />
+            <Text style={[styles.modalTitle, { color: Colors[theme]['on-surface'] }]}>Sort Food</Text>
+            {SORT_OPTIONS.map((option) => {
+              const isSelected = sortOrder === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.modalOption}
+                  onPress={() => {
+                    setSortOrder(option.value);
+                    setSortOpen(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      { color: isSelected ? Colors[theme].primary : Colors[theme]['on-surface'] },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  {isSelected && (
+                    <MaterialCommunityIcons name="check-circle" size={22} color={Colors[theme].primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        )}
-      </ScrollView>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing['container-padding'],
-    paddingTop: 56,
     paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
+    overflow: 'hidden',
   },
-  headerBack: { padding: 4, marginRight: Spacing.sm },
-  headerTitle: { ...Typography.h2, flex: 1 },
-  cartButton: {
+  headerDecorLarge: {
+    position: 'absolute',
+    top: -60,
+    right: -50,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  headerDecorSmall: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  headerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    ...Typography.h2,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    height: 48,
+    marginHorizontal: Spacing['container-padding'],
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+  },
+  searchInput: {
+    flex: 1,
+    ...Typography['body-md'],
+    paddingVertical: 0,
+  },
+
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing['container-padding'],
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  pillsRow: {
+    gap: Spacing.sm,
+    paddingRight: Spacing.sm,
+  },
+  pill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+  },
+  pillText: { ...Typography['label-md'], fontWeight: '600' },
+  filterButton: {
     width: 40,
     height: 40,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: { paddingBottom: 100 },
-  searchBar: {
+
+  listContent: {
+    paddingHorizontal: Spacing['container-padding'],
+    gap: Spacing.md,
+    paddingTop: Spacing.sm,
+  },
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: Spacing['container-padding'],
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    gap: Spacing.sm,
-    borderWidth: 1,
+    padding: Spacing.sm,
+    borderRadius: 16,
     ...Shadows.sm,
   },
-  searchInput: { flex: 1, ...Typography['body-lg'] },
-  clearBtn: { padding: 4 },
-
-  emptyState: { alignItems: 'center', paddingVertical: 80, paddingHorizontal: Spacing.xl },
-  emptyTitle: { ...Typography.h1, textAlign: 'center', marginTop: Spacing.lg },
-  emptySubtitle: { ...Typography['body-md'], textAlign: 'center', marginTop: Spacing.sm },
-
-  resultsSection: { paddingTop: Spacing.lg, gap: 48 },
-  group: { gap: Spacing.md },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing['container-padding'],
-  },
-  groupHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  groupTitle: { ...Typography.h2 },
-  countBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-  },
-  countText: { ...Typography['label-sm'], fontWeight: '600' },
-
-  restaurantsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Spacing['container-padding'],
-    gap: GRID_GAP,
-  },
-  restaurantCard: {
-    width: GRID_CARD_WIDTH,
-    borderRadius: BorderRadius.xl,
+  cardImageWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 16,
     overflow: 'hidden',
-    ...Shadows.sm,
+    backgroundColor: Colors.light['surface-container'],
   },
-  restaurantImageContainer: { position: 'relative' },
-  restaurantImage: { width: GRID_CARD_WIDTH, height: 130 },
-  statusBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.md,
+  cardImage: {
+    width: '100%',
+    height: '100%',
   },
-  statusText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
+  cardInfo: {
+    flex: 1,
+    marginLeft: Spacing.md,
+    paddingRight: 44,
+    gap: 2,
+  },
+  cardName: {
+    ...Typography['label-md'],
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  cardSubtitle: {
+    ...Typography['body-sm'],
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Spacing.sm,
+  },
+  cardMetaText: { ...Typography['label-sm'] },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5, marginHorizontal: 2 },
+
   ratingBadge: {
     position: 'absolute',
     top: 12,
@@ -342,59 +448,79 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: BorderRadius.md,
-  },
-  ratingText: { ...Typography['label-sm'], fontWeight: '700' },
-  restaurantInfo: { padding: Spacing.md },
-  restaurantName: { ...Typography.h2 },
-  restaurantCuisine: { ...Typography['body-sm'], marginTop: 2 },
-  restaurantMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: Spacing.sm,
-  },
-  restaurantMetaText: { ...Typography['label-sm'] },
-  metaDot: { width: 3, height: 3, borderRadius: 1.5, marginHorizontal: 4 },
-
-  menuGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Spacing['container-padding'],
-    gap: GRID_GAP,
-  },
-  menuCard: {
-    width: GRID_CARD_WIDTH,
-    borderRadius: BorderRadius.xl,
-    overflow: 'hidden',
-    ...Shadows.sm,
-  },
-  menuImage: { width: '100%', height: GRID_CARD_WIDTH, backgroundColor: Colors.light['surface-container'] },
-  menuInfo: { padding: Spacing.sm, gap: 2 },
-  menuName: { ...Typography.h2 },
-  menuDesc: { ...Typography['body-sm'] },
-  menuRestaurant: { ...Typography['label-sm'], marginTop: 2 },
-  menuPrice: { ...Typography['label-md'], fontWeight: '700', marginTop: 4 },
-
-  browseSection: {
-    paddingHorizontal: Spacing['container-padding'],
-    paddingTop: Spacing.lg,
-  },
-  browseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  browseTitle: { ...Typography.h2 },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
   },
-  chipText: { ...Typography['label-md'] },
+  ratingText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
+  addButton: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 34,
+    height: 34,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
+
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 64,
+    paddingHorizontal: Spacing.xl,
+  },
+  loadingState: {
+    alignItems: 'center',
+    paddingVertical: 64,
+    gap: Spacing.md,
+  },
+  loadingText: { ...Typography['body-md'] },
+  emptyIcon: {
+    width: 84,
+    height: 84,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+  },
+  emptyTitle: { ...Typography.h1, textAlign: 'center' },
+  emptySubtitle: {
+    ...Typography['body-md'],
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  emptyReset: {
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
+  },
+  emptyResetText: { ...Typography['label-md'], fontWeight: '700', color: '#ffffff' },
+
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalCard: {
+    paddingHorizontal: Spacing['container-padding'],
+    paddingTop: Spacing.md,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.light['surface-container-high'],
+    alignSelf: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitle: { ...Typography.h2, fontWeight: '700', marginBottom: Spacing.sm },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.md,
+  },
+  modalOptionText: { ...Typography['body-lg'] },
 });
