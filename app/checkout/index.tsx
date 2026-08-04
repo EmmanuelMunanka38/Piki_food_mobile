@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,6 @@ import { useAuthStore } from '@/store/authStore';
 import { ordersService } from '@/services/orders.service';
 import { paymentService } from '@/services/payment.service';
 import { PaymentMethod } from '@/types';
-
 type PaymentOption = 'airtel_money' | 'mixx_by_yas' | 'halopesa' | 'mpesa' | 'card' | 'cash';
 
 interface PaymentMethodOption {
@@ -96,6 +95,11 @@ const paymentMethods: PaymentMethodOption[] = [
 
 const DELIVERY_ETA = '25 - 35 min';
 
+const PAYMENT_POLL_INTERVAL_MS = 3000;
+const PAYMENT_CONFIRM_TIMEOUT_MS = 120000;
+
+type PaymentState = 'idle' | 'confirming' | 'expired';
+
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const [selectedPayment, setSelectedPayment] = useState<PaymentOption>('airtel_money');
@@ -105,6 +109,19 @@ export default function CheckoutScreen() {
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [paymentState, setPaymentState] = useState<PaymentState>('idle');
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paymentRef = useRef<{ orderId: string; orderReference: string } | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+      }
+    };
+  }, []);
 
   const { items, restaurantId, restaurantName, subtotal, deliveryFee, serviceFee, clearCart } =
     useCartStore();
@@ -189,6 +206,98 @@ export default function CheckoutScreen() {
     setPaymentModalVisible(true);
   };
 
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  const cancelPlacedOrder = async (orderId: string) => {
+    try {
+      await ordersService.cancelOrder(orderId);
+    } catch {
+      // Best-effort: the order may already be moving past the cancellable window.
+    }
+  };
+
+  const handlePaymentSuccess = useCallback((orderId: string) => {
+    stopPolling();
+    paymentRef.current = null;
+    if (!mountedRef.current) return;
+    clearCart();
+    setPaymentModalVisible(false);
+    setPaymentState('idle');
+    router.replace(`/checkout/track-order?id=${orderId}`);
+  }, [clearCart]);
+
+  const handlePaymentFailed = useCallback(async (orderId: string) => {
+    stopPolling();
+    paymentRef.current = null;
+    await cancelPlacedOrder(orderId);
+    if (!mountedRef.current) return;
+    setPaymentModalVisible(false);
+    setPaymentState('idle');
+    Alert.alert(
+      'Payment Failed',
+      'Your payment was not completed and the order was cancelled. Please try again.',
+    );
+  }, []);
+
+  const handleCancelOrder = useCallback(async () => {
+    const { orderId } = paymentRef.current || {};
+    if (!orderId) return;
+    stopPolling();
+    paymentRef.current = null;
+    await cancelPlacedOrder(orderId);
+    if (!mountedRef.current) return;
+    setPaymentModalVisible(false);
+    setPaymentState('idle');
+    Alert.alert('Payment Cancelled', 'Your order was cancelled. You can try again.');
+  }, []);
+
+  const pollPaymentStatus = useCallback((startedAt: number) => {
+    const { orderId, orderReference } = paymentRef.current || {};
+    if (!orderId || !orderReference) return;
+
+    const check = async () => {
+      try {
+        const transaction = await paymentService.getTransactionStatus(orderReference);
+        if (!mountedRef.current) return;
+        if (transaction.status === 'SUCCESSFUL') {
+          handlePaymentSuccess(orderId);
+          return;
+        }
+        if (transaction.status === 'FAILED') {
+          await handlePaymentFailed(orderId);
+          return;
+        }
+      } catch {
+        // Transient network error; keep polling.
+      }
+
+      if (!mountedRef.current) return;
+
+      if (Date.now() - startedAt >= PAYMENT_CONFIRM_TIMEOUT_MS) {
+        stopPolling();
+        setPaymentState('expired');
+        return;
+      }
+
+      pollTimerRef.current = setTimeout(() => pollPaymentStatus(startedAt), PAYMENT_POLL_INTERVAL_MS);
+    };
+
+    check();
+  }, [handlePaymentFailed, handlePaymentSuccess]);
+
+  const handleRetryPoll = useCallback(() => {
+    const { orderId, orderReference } = paymentRef.current || {};
+    if (!orderId || !orderReference) return;
+    stopPolling();
+    setPaymentState('confirming');
+    pollPaymentStatus(Date.now());
+  }, [pollPaymentStatus]);
+
   const handleConfirmPayment = async () => {
     const amount = parseFloat(paymentAmount);
     const phone = phoneNumber.trim().replace(/\s+/g, '');
@@ -206,32 +315,38 @@ export default function CheckoutScreen() {
     try {
       const order = await placeOrder(selectedPayment);
 
+      let transaction;
       try {
-        await paymentService.initiateUSSDPush({
+        const result = await paymentService.initiateUSSDPush({
           orderId: order.id,
           amount,
           phoneNumber: phone,
         });
+        transaction = result.transaction;
       } catch {
-        clearCart();
+        await cancelPlacedOrder(order.id);
+        if (!mountedRef.current) return;
         setPaymentModalVisible(false);
-        router.replace(`/checkout/track-order?id=${order.id}`);
+        setPaymentState('idle');
         Alert.alert(
-          'Payment Push Failed',
-          'Your order was placed. Please complete payment using the USSD prompt on your phone.',
+          'Payment Failed',
+          'We could not process your payment. Your order was cancelled. Please try again.',
         );
         return;
       }
 
-      clearCart();
-      setPaymentModalVisible(false);
-      router.replace(`/checkout/track-order?id=${order.id}`);
+      paymentRef.current = { orderId: order.id, orderReference: transaction.orderReference };
+      setPaymentState('confirming');
+      pollPaymentStatus(Date.now());
     } catch (err: any) {
+      if (!mountedRef.current) return;
       const message = err?.response?.data?.message || err?.message || 'Failed to place order';
       const details = err?.response?.data ? JSON.stringify(err.response.data).substring(0, 200) : '';
       Alert.alert('Order Failed', `${message}${details ? '\n\n' + details : ''}`);
     } finally {
-      setIsPlacing(false);
+      if (mountedRef.current) {
+        setIsPlacing(false);
+      }
     }
   };
 
@@ -538,27 +653,60 @@ export default function CheckoutScreen() {
             </View>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.confirmBtn, { backgroundColor: isPlacing ? '#0A5C2E' : Colors.light.primary }]}
-                onPress={handleConfirmPayment}
-                disabled={isPlacing}
-                activeOpacity={0.85}
-              >
-                {isPlacing ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.confirmBtnText}>
-                    Confirm & Pay {formatPrice(parseFloat(paymentAmount) || 0)}
-                  </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setPaymentModalVisible(false)}
-                disabled={isPlacing}
-              >
-                <Text style={[styles.cancelBtnText, { color: Colors.light['on-surface-variant'] }]}>Cancel</Text>
-              </TouchableOpacity>
+              {paymentState === 'confirming' ? (
+                <>
+                  <View style={styles.processingRow}>
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                    <Text style={[styles.processingText, { color: Colors.light['on-surface'] }]}>Waiting for payment confirmation...</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.cancelBtn, { marginTop: Spacing.sm }]}
+                    onPress={handleCancelOrder}
+                  >
+                    <Text style={[styles.cancelBtnText, { color: Colors.light['on-surface-variant'] }]}>Cancel Payment</Text>
+                  </TouchableOpacity>
+                </>
+              ) : paymentState === 'expired' ? (
+                <>
+                  <Text style={[styles.expiredText, { color: Colors.light['on-surface-variant'] }]}>Payment confirmation timed out. You can retry or cancel the order.</Text>
+                  <TouchableOpacity
+                    style={[styles.confirmBtn, { backgroundColor: Colors.light.primary }]}
+                    onPress={handleRetryPoll}
+                  >
+                    <Text style={styles.confirmBtnText}>Retry</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.cancelBtn, { marginTop: Spacing.sm }]}
+                    onPress={handleCancelOrder}
+                  >
+                    <Text style={[styles.cancelBtnText, { color: Colors.light['on-surface-variant'] }]}>Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.confirmBtn, { backgroundColor: isPlacing ? '#0A5C2E' : Colors.light.primary }]}
+                    onPress={handleConfirmPayment}
+                    disabled={isPlacing}
+                    activeOpacity={0.85}
+                  >
+                    {isPlacing ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.confirmBtnText}>
+                        Confirm & Pay {formatPrice(parseFloat(paymentAmount) || 0)}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => setPaymentModalVisible(false)}
+                    disabled={isPlacing}
+                  >
+                    <Text style={[styles.cancelBtnText, { color: Colors.light['on-surface-variant'] }]}>Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -805,6 +953,9 @@ const styles = StyleSheet.create({
   },
   ussdNoteText: { ...Typography['label-sm'], flex: 1 },
   modalFooter: { gap: Spacing.sm },
+  processingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm },
+  processingText: { ...Typography['label-md'], fontWeight: '600' },
+  expiredText: { ...Typography['body-md'], textAlign: 'center', marginBottom: Spacing.sm },
   confirmBtn: {
     height: 56,
     borderRadius: BorderRadius.full,
