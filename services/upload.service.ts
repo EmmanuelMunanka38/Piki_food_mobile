@@ -1,4 +1,5 @@
-import { API_ORIGIN, api } from './api';
+import { API_ORIGIN, BASE_URL } from './api';
+import { useAuthStore } from '@/store/authStore';
 
 const toAbsoluteUrl = (url: string) => {
   if (/^https?:\/\//i.test(url)) return url;
@@ -20,10 +21,22 @@ export const uploadService = {
 
     formData.append('type', 'menu');
 
-    const { data } = await api.post<{ data: { url: string } }>('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    const token = useAuthStore.getState().token;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${BASE_URL}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData as any,
     });
 
-    return toAbsoluteUrl(data.data.url);
+    if (!response.ok) {
+      throw new Error('Image upload failed');
+    }
+
+    const json = await response.json().catch(() => ({}));
+    const url = json?.data?.url || json?.url || '';
+    return toAbsoluteUrl(url);
   },
 };

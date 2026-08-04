@@ -230,7 +230,7 @@ export default function DriverDashboardScreen() {
             <View style={[styles.earningsCard, { backgroundColor: Colors[theme]['surface-container-lowest'], borderColor: Colors[theme]['surface-variant'] }]}>
               <View style={styles.earningsRow}>
                 <View style={styles.earningsItem}>
-                  <Text style={[styles.earningsLabel, { color: Colors[theme]['on-surface-variant'] }]}>Today's Earnings</Text>
+                  <Text style={[styles.earningsLabel, { color: Colors[theme]['on-surface-variant'] }]}>Earnings Today</Text>
                   <Text style={[styles.earningsValue, { color: Colors[theme].primary }]}>{formatPrice(earnings)}</Text>
                 </View>
                 <View style={[styles.earningsDivider, { backgroundColor: Colors[theme]['surface-variant'] }]} />

@@ -127,7 +127,7 @@ export default function RestaurantDashboardScreen() {
       <View style={[styles.container, { backgroundColor: Colors[theme].background, justifyContent: 'center', alignItems: 'center', padding: Spacing['container-padding'] }]}>
         <View style={[styles.createCard, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}>
           <MaterialCommunityIcons name="store-plus-outline" size={64} color={Colors[theme].primary} style={{ marginBottom: Spacing.md }} />
-          <Text style={[styles.createTitle, { color: Colors[theme]['on-surface'] }]}>You don't have a restaurant yet</Text>
+          <Text style={[styles.createTitle, { color: Colors[theme]['on-surface'] }]}>You do not have a restaurant yet</Text>
           <Text style={[styles.createDesc, { color: Colors[theme]['on-surface-variant'] }]}>Create your restaurant to start receiving orders</Text>
           <TouchableOpacity
             style={[styles.createBtn, { backgroundColor: Colors[theme].primary }]}

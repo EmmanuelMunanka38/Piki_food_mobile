@@ -238,6 +238,25 @@ export type OrderTrackingStatus =
   | 'on_the_way'
   | 'delivered';
 
+export type TransactionStatus = 'PENDING' | 'SUCCESSFUL' | 'FAILED';
+
+export interface Transaction {
+  id: string;
+  orderReference: string;
+  orderId: string | null;
+  clickPesaId: string | null;
+  amount: number;
+  phoneNumber: string;
+  status: TransactionStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentInitiationResult {
+  transaction: Transaction;
+  clickPesa: any;
+}
+
 export interface TrackingUpdate {
   orderId: string;
   status: OrderTrackingStatus;
