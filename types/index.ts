@@ -40,6 +40,10 @@ export interface MenuItem {
   isPopular?: boolean;
 }
 
+export interface FoodItem extends MenuItem {
+  restaurant: Restaurant;
+}
+
 export interface CartItem {
   id: string;
   menuItem: MenuItem;
@@ -53,6 +57,7 @@ export interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  image?: string;
   specialInstructions?: string;
 }
 
@@ -92,6 +97,8 @@ export type PaymentMethod =
   | 'mpesa'
   | 'tigo_pesa'
   | 'airtel_money'
+  | 'mixx_by_yas'
+  | 'halopesa'
   | 'card'
   | 'cash';
 
@@ -124,6 +131,19 @@ export interface Category {
   name: string;
   icon: string;
   image: string;
+}
+
+export interface Promotion {
+  id: string;
+  title: string;
+  description: string;
+  code?: string;
+  image?: string;
+  ctaLabel: string;
+  isActive: boolean;
+  restaurantId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardStats {
