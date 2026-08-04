@@ -12,6 +12,7 @@ interface OrderState {
   loadCurrentOrder: (id: string) => Promise<void>;
   loadTrackedOrder: (id: string) => Promise<void>;
   cancelOrder: (id: string) => Promise<void>;
+  deleteOrders: (ids: string[]) => Promise<void>;
   setCurrentOrder: (order: Order | null) => void;
   clearTrackedOrder: () => void;
 }
@@ -64,6 +65,14 @@ export const useOrderStore = create<OrderState>((set) => ({
         state.currentOrder?.id === id
           ? { ...state.currentOrder, status: 'cancelled' as const }
           : state.currentOrder,
+    }));
+  },
+
+  deleteOrders: async (ids: string[]) => {
+    await Promise.all(ids.map((id) => ordersService.deleteOrder(id)));
+    set((state) => ({
+      orders: state.orders.filter((o) => !ids.includes(o.id)),
+      currentOrder: state.currentOrder && ids.includes(state.currentOrder.id) ? null : state.currentOrder,
     }));
   },
 
