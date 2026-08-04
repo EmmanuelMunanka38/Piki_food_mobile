@@ -89,6 +89,17 @@ export function RestaurantCardSkeleton() {
   );
 }
 
+export function DealCardSkeleton() {
+  return (
+    <View style={styles.dealCard}>
+      <SkeletonLoader width={96} height={24} borderRadius={BorderRadius.full} />
+      <SkeletonLoader width="80%" height={20} style={{ marginTop: Spacing.md }} />
+      <SkeletonLoader width="55%" height={14} style={{ marginTop: Spacing.sm }} />
+      <SkeletonLoader width={112} height={38} borderRadius={BorderRadius.full} style={{ marginTop: Spacing.md }} />
+    </View>
+  );
+}
+
 export function BottomSheetSkeleton() {
   return (
     <View style={styles.bottomSheetSkeleton}>
@@ -129,6 +140,13 @@ const styles = StyleSheet.create({
   restaurantCard: {
     width: 240,
     marginRight: Spacing.md,
+  },
+  dealCard: {
+    marginHorizontal: Spacing['container-padding'],
+    marginTop: Spacing.lg,
+    padding: Spacing.lg,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   restaurantCardInfo: {
     padding: Spacing.sm,
