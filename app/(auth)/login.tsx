@@ -9,6 +9,8 @@ import { Image } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+import { isValidEmail, isValidTanzanianPhone } from '@/utils/validation';
+import { loginWithProvider } from '@/services/auth0';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -34,14 +36,15 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { sendOtp } = useAuthStore();
+  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
+  const { sendOtp, socialLogin, setSocialError } = useAuthStore();
 
   const detected = useMemo(() => detectRole(phone), [phone]);
   const roleInfo = roleConfig[detected.role];
 
-  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isEmailValid = isValidEmail(email);
   const numberPart = detected.number;
-  const isPhoneValid = /^\+?\d{7,15}$/.test(numberPart);
+  const isPhoneValid = isValidTanzanianPhone(numberPart);
   const isNameValid = mode === 'sign-up' ? name.trim().length >= 2 : true;
   const canSubmit = isEmailValid && isPhoneValid && isNameValid && !isSubmitting;
 
@@ -50,7 +53,7 @@ export default function AuthScreen() {
       if (!isEmailValid) {
         setError('Please enter a valid email address');
       } else if (!isPhoneValid) {
-        setError('Enter a valid phone number (e.g. +255712345678 or D+255712345678)');
+        setError('Enter the 9-digit number after 255 (e.g. 255712345678)');
       } else if (mode === 'sign-up' && !isNameValid) {
         setError('Name must be at least 2 characters');
       }
@@ -84,13 +87,35 @@ export default function AuthScreen() {
     setError('');
   }, []);
 
-  const handleGoogleLogin = () => {
-    // TODO: implement Google login
-  };
+  const handleSocialLogin = useCallback(
+    async (provider: 'google' | 'apple') => {
+      if (socialLoading) return;
+      setError('');
+      setSocialError(null);
+      setSocialLoading(provider);
+      try {
+        const idToken = await loginWithProvider(provider);
+        await socialLogin(idToken);
+        setSocialError(null);
+        router.replace('/(tabs)');
+      } catch (err: any) {
+        const detail = err?.message || 'Social login failed. Please try again.';
+        if (__DEV__) {
+          console.warn('[Auth0] Social login failed:', detail);
+        }
+        const message = 'Authentication failed. Please try again.';
+        setSocialError(message);
+        setError(message);
+      } finally {
+        setSocialLoading(null);
+      }
+    },
+    [socialLogin, setSocialError, socialLoading],
+  );
 
-  const handleAppleLogin = () => {
-    // TODO: implement Apple login
-  };
+  const handleGoogleLogin = () => handleSocialLogin('google');
+
+  const handleAppleLogin = () => handleSocialLogin('apple');
 
   return (
     <KeyboardAvoidingView
@@ -179,7 +204,7 @@ export default function AuthScreen() {
                 <MaterialCommunityIcons name="account-outline" size={20} color={Colors[theme]['on-surface-variant']} />
                 <TextInput
                   style={[styles.input, { color: Colors[theme]['on-surface'] }]}
-                  placeholder="John Doe"
+                  placeholder="Emmanuel Mnanka"
                   placeholderTextColor={Colors[theme]['on-surface-variant'] + '80'}
                   value={name}
                   onChangeText={setName}
@@ -262,13 +287,35 @@ export default function AuthScreen() {
           </View>
 
           <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleLogin} activeOpacity={0.8}>
-              <MaterialCommunityIcons name="google" size={22} color="#4285F4" />
-              <Text style={[styles.socialBtnText, { color: Colors[theme]['on-surface'] }]}>Google</Text>
+            <TouchableOpacity
+              style={styles.socialBtn}
+              onPress={handleGoogleLogin}
+              disabled={!!socialLoading}
+              activeOpacity={0.8}
+            >
+              {socialLoading === 'google' ? (
+                <ActivityIndicator size="small" color="#4285F4" />
+              ) : (
+                <MaterialCommunityIcons name="google" size={22} color="#4285F4" />
+              )}
+              <Text style={[styles.socialBtnText, { color: Colors[theme]['on-surface'] }]}>
+                {socialLoading === 'google' ? 'Signing in…' : 'Google'}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.socialBtn} onPress={handleAppleLogin} activeOpacity={0.8}>
-              <MaterialCommunityIcons name="apple" size={22} color="#000000" />
-              <Text style={[styles.socialBtnText, { color: Colors[theme]['on-surface'] }]}>Apple</Text>
+            <TouchableOpacity
+              style={styles.socialBtn}
+              onPress={handleAppleLogin}
+              disabled={!!socialLoading}
+              activeOpacity={0.8}
+            >
+              {socialLoading === 'apple' ? (
+                <ActivityIndicator size="small" color="#000000" />
+              ) : (
+                <MaterialCommunityIcons name="apple" size={22} color="#000000" />
+              )}
+              <Text style={[styles.socialBtnText, { color: Colors[theme]['on-surface'] }]}>
+                {socialLoading === 'apple' ? 'Signing in…' : 'Apple'}
+              </Text>
             </TouchableOpacity>
           </View>
 

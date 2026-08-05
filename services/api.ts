@@ -110,6 +110,7 @@ async function request<T>(
       path.includes('/auth/login') ||
       path.includes('/auth/send-otp') ||
       path.includes('/auth/verify-otp') ||
+      path.includes('/auth/social') ||
       path.includes('/auth/refresh');
 
     if (response.status === 401 && !isPublicAuthRoute) {

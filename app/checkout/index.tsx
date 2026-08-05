@@ -25,6 +25,7 @@ import { useAuthStore } from '@/store/authStore';
 import { ordersService } from '@/services/orders.service';
 import { paymentService } from '@/services/payment.service';
 import { PaymentMethod } from '@/types';
+import { isValidTanzanianPhone, normalizeTanzanianPhone } from '@/utils/validation';
 type PaymentOption = 'airtel_money' | 'mixx_by_yas' | 'halopesa' | 'mpesa' | 'card' | 'cash';
 
 interface PaymentMethodOption {
@@ -145,6 +146,12 @@ export default function CheckoutScreen() {
     setSelectedPayment(method.id);
   };
 
+  const handlePhoneChange = (text: string) => {
+    setPhoneNumber(text.replace(/\D/g, '').slice(0, 9));
+  };
+
+  const isPhoneNumberValid = /^\d{9}$/.test(phoneNumber);
+
   const buildDeliveryAddress = () =>
     deliveryAddress || {
       id: 'current',
@@ -202,7 +209,7 @@ export default function CheckoutScreen() {
 
     Haptics.selectionAsync().catch(() => {});
     setPaymentAmount(String(total));
-    setPhoneNumber(useAuthStore.getState().user?.phone || '');
+    setPhoneNumber(normalizeTanzanianPhone(useAuthStore.getState().user?.phone || ''));
     setPaymentModalVisible(true);
   };
 
@@ -300,14 +307,17 @@ export default function CheckoutScreen() {
 
   const handleConfirmPayment = async () => {
     const amount = parseFloat(paymentAmount);
-    const phone = phoneNumber.trim().replace(/\s+/g, '');
+    const phone = `255${phoneNumber.trim().replace(/\s+/g, '')}`;
 
     if (!amount || amount <= 0) {
       Alert.alert('Invalid Amount', 'Enter a valid amount to pay.');
       return;
     }
-    if (!/^\+?[0-9]{9,15}$/.test(phone)) {
-      Alert.alert('Invalid Phone Number', 'Enter the mobile money phone number to receive the USSD push.');
+    if (!isValidTanzanianPhone(phone)) {
+      Alert.alert(
+        'Invalid Phone Number',
+        'Enter the 9-digit number after 255 (e.g. 255740336972).',
+      );
       return;
     }
 
@@ -632,14 +642,27 @@ export default function CheckoutScreen() {
               </View>
 
               <Text style={[styles.inputLabel, { color: Colors.light['on-surface-variant'] }]}>Mobile Money Number</Text>
-              <View style={[styles.inputWrap, { borderColor: Colors.light['outline-variant'] }]}>
+              <View
+                style={[
+                  styles.inputWrap,
+                  {
+                    borderColor: phoneNumber
+                      ? isPhoneNumberValid
+                        ? Colors.light.primary
+                        : Colors.light.tertiary
+                      : Colors.light['outline-variant'],
+                  },
+                ]}
+              >
                 <MaterialCommunityIcons name="cellphone" size={20} color={Colors.light.primary} />
+                <Text style={[styles.inputPrefix, { color: Colors.light['on-surface-variant'] }]}>+255</Text>
                 <TextInput
                   style={[styles.input, { color: Colors.light['on-surface'] }]}
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  keyboardType="phone-pad"
-                  placeholder="e.g. 0977 123 456"
+                  onChangeText={handlePhoneChange}
+                  keyboardType="number-pad"
+                  maxLength={9}
+                  placeholder="740 336 972"
                   placeholderTextColor={Colors.light['outline-variant']}
                 />
               </View>
