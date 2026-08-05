@@ -39,7 +39,6 @@ import { getRecommendationSeed } from '@/utils/recommendations';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.7;
 const POPULAR_CARD_STEP = CARD_WIDTH + Spacing.lg;
-const POPULAR_AUTOPLAY_MS = 3500;
 const REC_CARD_WIDTH = Math.round(width * 0.66);
 const REC_CARD_GAP = Spacing.md;
 const NO_RESTAURANTS: Restaurant[] = [];
@@ -74,8 +73,6 @@ export default function HomeScreen() {
   const error = restaurantsError || featuredError || categoriesError;
   useRestaurantMenus(restaurants);
   const popularScrollRef = useRef<ScrollView>(null);
-  const popularIndexRef = useRef(0);
-  const popularDraggingRef = useRef(false);
   const refreshProgress = useRef(new Animated.Value(0)).current;
   const lastPullRef = useRef(0);
 
@@ -111,19 +108,6 @@ export default function HomeScreen() {
     inputRange: [0, 40, 60],
     outputRange: [0, 0.9, 1],
   });
-
-  useEffect(() => {
-    if (featured.length <= 1) return;
-    const interval = setInterval(() => {
-      if (popularDraggingRef.current) return;
-      popularIndexRef.current = (popularIndexRef.current + 1) % featured.length;
-      popularScrollRef.current?.scrollTo({
-        x: popularIndexRef.current * POPULAR_CARD_STEP,
-        animated: true,
-      });
-    }, POPULAR_AUTOPLAY_MS);
-    return () => clearInterval(interval);
-  }, [featured.length]);
 
   const filteredRestaurants = selectedCategory
     ? restaurants.filter((r) =>
@@ -240,7 +224,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {isLoading && categories.length === 0 ? (
+        {isLoading && categories.length === 0 ? ( 
           <CategorySkeleton />
         ) : (
         <ScrollView
@@ -382,6 +366,58 @@ export default function HomeScreen() {
 
         {!showFiltered && (
           <>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: Colors[theme]['on-surface'] }]}>
+            Popular Restaurants
+          </Text>
+        </View>
+
+        {isLoading && featured.length === 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.restaurantsRow}
+          >
+            {[1, 2, 3].map((i) => <RestaurantCardSkeleton key={i} />)}
+          </ScrollView>
+        ) : (
+        <ScrollView
+          ref={popularScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.restaurantsRow}
+          scrollEventThrottle={16}
+        >
+          {featured.map((restaurant) => (
+            <TouchableOpacity
+              key={restaurant.id}
+              activeOpacity={0.9}
+              onPress={() => router.push(`/restaurant-details?id=${restaurant.id}`)}
+              style={[styles.restaurantCard, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}
+            >
+              <View style={styles.restaurantImageContainer}>
+                <OptimizedImage uri={restaurant.image} style={styles.restaurantImage} />
+                <View style={[styles.ratingBadge, { backgroundColor: 'rgba(255,255,255,0.9)' }]}>
+                  <MaterialCommunityIcons name="star" size={16} color={Colors[theme]['secondary-container']} />
+                  <Text style={[styles.ratingText, { color: Colors[theme]['on-surface'] }]}>{restaurant.rating}</Text>
+                </View>
+              </View>
+              <View style={styles.restaurantInfo}>
+                <Text
+                  style={[styles.restaurantName, { color: Colors[theme]['on-surface'] }]}
+                  numberOfLines={1}
+                >
+                  {restaurant.name}
+                </Text>
+                <Text style={[styles.restaurantMeta, { color: Colors[theme]['on-surface-variant'] }]}>
+                  {restaurant.cuisine} · {restaurant.deliveryTime}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        )}
+
         <DealsSection />
 
         <View style={styles.sectionHeader}>
@@ -459,69 +495,6 @@ export default function HomeScreen() {
             </Text>
           </View>
         ) : null}
-
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: Colors[theme]['on-surface'] }]}>
-            Popular Restaurants
-          </Text>
-        </View>
-
-        {isLoading && featured.length === 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.restaurantsRow}
-          >
-            {[1, 2, 3].map((i) => <RestaurantCardSkeleton key={i} />)}
-          </ScrollView>
-        ) : (
-        <ScrollView
-          ref={popularScrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.restaurantsRow}
-          scrollEventThrottle={16}
-          onScrollBeginDrag={() => {
-            popularDraggingRef.current = true;
-          }}
-          onScrollEndDrag={() => {
-            popularDraggingRef.current = false;
-          }}
-          onScroll={(e) => {
-            popularIndexRef.current = Math.round(
-              e.nativeEvent.contentOffset.x / POPULAR_CARD_STEP
-            );
-          }}
-        >
-          {featured.map((restaurant) => (
-            <TouchableOpacity
-              key={restaurant.id}
-              activeOpacity={0.9}
-              onPress={() => router.push(`/restaurant-details?id=${restaurant.id}`)}
-              style={[styles.restaurantCard, { backgroundColor: Colors[theme]['surface-container-lowest'] }]}
-            >
-              <View style={styles.restaurantImageContainer}>
-                <OptimizedImage uri={restaurant.image} style={styles.restaurantImage} />
-                <View style={[styles.ratingBadge, { backgroundColor: 'rgba(255,255,255,0.9)' }]}>
-                  <MaterialCommunityIcons name="star" size={16} color={Colors[theme]['secondary-container']} />
-                  <Text style={[styles.ratingText, { color: Colors[theme]['on-surface'] }]}>{restaurant.rating}</Text>
-                </View>
-              </View>
-              <View style={styles.restaurantInfo}>
-                <Text
-                  style={[styles.restaurantName, { color: Colors[theme]['on-surface'] }]}
-                  numberOfLines={1}
-                >
-                  {restaurant.name}
-                </Text>
-                <Text style={[styles.restaurantMeta, { color: Colors[theme]['on-surface-variant'] }]}>
-                  {restaurant.cuisine} · {restaurant.deliveryTime}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        )}
           </>
         )}
       </ScrollView>
@@ -626,6 +599,7 @@ const styles = StyleSheet.create({
 
   recommendedList: {
     paddingHorizontal: Spacing['container-padding'],
+    paddingVertical: Spacing.md,
   },
   recommendedCard: {
     width: REC_CARD_WIDTH,

@@ -22,6 +22,16 @@ export const authService = {
     };
   },
 
+  async socialLogin(idToken: string): Promise<{ user: any; accessToken: string; refreshToken: string; isNewUser: boolean }> {
+    const res = await api.post<any>('/auth/social', { idToken });
+    return {
+      user: res.data.data.user,
+      accessToken: res.data.data.accessToken,
+      refreshToken: res.data.data.refreshToken,
+      isNewUser: res.data.data.isNewUser,
+    };
+  },
+
   async refreshToken(token: string): Promise<{ accessToken: string; refreshToken: string }> {
     const res = await api.post<any>('/auth/refresh', { refreshToken: token });
     return res.data.data;

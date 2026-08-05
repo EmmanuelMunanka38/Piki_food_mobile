@@ -11,8 +11,11 @@ interface AuthState {
   setUser: (user: User) => void;
   setToken: (token: string) => void;
   setRefreshToken: (token: string) => void;
+  socialError: string | null;
+  setSocialError: (message: string | null) => void;
   sendOtp: (email: string, phone: string, role?: string) => Promise<void>;
   verifyOTP: (email: string, code: string, name?: string, role?: string) => Promise<void>;
+  socialLogin: (idToken: string) => Promise<void>;
   updateProfile: (data: { name?: string; email?: string; avatar?: string }) => Promise<void>;
   logout: () => void;
 }
@@ -24,10 +27,12 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       refreshToken: null,
       isLoading: false,
+      socialError: null,
 
       setUser: (user) => set({ user }),
       setToken: (token) => set({ token }),
       setRefreshToken: (refreshToken) => set({ refreshToken }),
+      setSocialError: (message) => set({ socialError: message }),
 
       updateProfile: async (data: { name?: string; email?: string; avatar?: string }) => {
         try {
@@ -71,6 +76,27 @@ export const useAuthStore = create<AuthState>()(
             err?.response?.data?.message ||
             err?.response?.data?.errors?.[0]?.message ||
             'Verification failed';
+          throw new Error(message);
+        }
+      },
+
+      socialLogin: async (idToken: string) => {
+        set({ isLoading: true, socialError: null });
+        try {
+          const { authService } = await import('@/services/auth.service');
+          const { user, accessToken, refreshToken } = await authService.socialLogin(idToken);
+          set({ user, token: accessToken, refreshToken, isLoading: false, socialError: null });
+          const { useCartStore } = await import('@/store/cartStore');
+          useCartStore.getState().loadCart();
+          const { newRecommendationSession } = await import('@/utils/recommendations');
+          await newRecommendationSession(user.id);
+        } catch (err: any) {
+          set({ isLoading: false });
+          const message =
+            err?.body?.message ||
+            err?.response?.data?.message ||
+            err?.response?.data?.errors?.[0]?.message ||
+            'Social login failed';
           throw new Error(message);
         }
       },

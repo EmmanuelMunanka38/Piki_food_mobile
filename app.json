@@ -4,7 +4,7 @@
     "slug": "piki-food",
     "version": "1.0.4",
     "orientation": "portrait",
-    "icon": "./logo.png",
+    "icon": "./assets/images/logo.png",
     "scheme": "piki-food",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -68,7 +68,9 @@
       "eas": {
         "projectId": "44d147c3-ea46-465f-9ed2-8fc0015e6fd3"
       },
-      "apiUrl": "https://zupbackend-production.up.railway.app"
+      "apiUrl": "https://zupbackend-production.up.railway.app",
+      "auth0Domain": "dev-grfvpmcxyurxzkmp.uk.auth0.com",
+      "auth0ClientId": "zynp2v3hQUf40rH6R2HWHvifm1cReE9W"
     }
   }
 }

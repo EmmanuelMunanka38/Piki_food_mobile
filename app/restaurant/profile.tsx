@@ -7,6 +7,7 @@ import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/
 import OptimizedImage from '@/components/ui/OptimizedImage';
 import { useAuthStore } from '@/store/authStore';
 import { useRestaurantStore } from '@/store/restaurantStore';
+import { isValidEmail } from '@/utils/validation';
 import { uploadService } from '@/services/upload.service';
 
 export default function RestaurantProfileScreen() {
@@ -168,6 +169,10 @@ export default function RestaurantProfileScreen() {
   const handleSave = async () => {
     if (!editName.trim()) {
       Alert.alert('Required', 'Name cannot be empty');
+      return;
+    }
+    if (editEmail.trim() && !isValidEmail(editEmail.trim())) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
     setSaving(true);
@@ -405,7 +410,7 @@ export default function RestaurantProfileScreen() {
 
             <Text style={[styles.inputLabel, { color: Colors[theme]['on-surface-variant'], marginTop: Spacing.md }]}>Email</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: Colors[theme]['surface-container-low'], color: Colors[theme]['on-surface'], borderColor: Colors[theme]['outline-variant'] }]}
+              style={[styles.input, { backgroundColor: Colors[theme]['surface-container-low'], color: Colors[theme]['on-surface'], borderColor: editEmail ? (isValidEmail(editEmail.trim()) ? Colors[theme].primary : Colors[theme].tertiary) : Colors[theme]['outline-variant'] }]}
               value={editEmail}
               onChangeText={setEditEmail}
               placeholder="your@email.com"
